@@ -130,7 +130,10 @@
     </div>
     <div>
       <label>Local IP</label>
-      <input name="local_ip" placeholder="192.168.1.2" required>
+      <input name="local_ip" id="local-ip-input" placeholder="192.168.1.2" required oninput="previewVirtualIP()">
+      <p class="muted ip-preview" id="ip-preview" style="margin-top: 0.35rem; font-size: 0.85rem;">
+        <span id="preview-text"></span>
+      </p>
     </div>
     <div>
       <label>Admin port (optional)</label>
@@ -140,8 +143,32 @@
   </form>
 </div>
 
-{% if site.vpn_type == 'wireguard' %}
 <script>
+const VIRTUAL_SUBNET = '{{ site.virtual_subnet }}';
+const LOCAL_SUBNET = '{{ site.local_subnet }}';
+
+function previewVirtualIP() {
+  const input = document.getElementById('local-ip-input');
+  const preview = document.getElementById('preview-text');
+  const localIP = input.value.trim();
+
+  if (!localIP || !localIP.match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/)) {
+    preview.textContent = '';
+    return;
+  }
+
+  // Client-side calculation for instant feedback
+  try {
+    const virtualBase = VIRTUAL_SUBNET.split('/')[0].split('.').slice(0, 3).join('.');
+    const localHost = localIP.split('.')[3];
+    const virtualIP = `${virtualBase}.${localHost}`;
+    preview.innerHTML = `→ Reachable at <span class="mono" style="color: var(--accent);">${virtualIP}</span>`;
+  } catch (e) {
+    preview.textContent = '';
+  }
+}
+
+{% if site.vpn_type == 'wireguard' %}
 function showTab(tabId) {
   document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
   document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
@@ -158,6 +185,6 @@ async function copyTeltonikaScript() {
     console.error('Copy failed:', e);
   }
 }
-</script>
 {% endif %}
+</script>
 {% endblock %}

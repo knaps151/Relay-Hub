@@ -100,6 +100,10 @@ static_dir = BASE_DIR / "static"
 static_dir.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
+# Register API router
+from app.api import router as api_router
+app.include_router(api_router)
+
 
 def _authed(request: Request) -> bool:
     return request.cookies.get("relay_session") == "ok"
