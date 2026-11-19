@@ -40,7 +40,10 @@
     {% elif site.vpn_type == 'wireguard' %}
       <p class="muted">Download the peer config and import on the site router / <span class="mono">wg-quick</span>.</p>
       <p class="mono">Tunnel IP: {{ site.wg_tunnel_ip }}</p>
-      <a class="btn" href="/sites/{{ site.id }}/wireguard.conf">Download .conf</a>
+      <div class="row">
+        <a class="btn" href="/sites/{{ site.id }}/wireguard.conf">Download .conf</a>
+        <a class="btn secondary" href="/sites/{{ site.id }}/teltonika.txt">Teltonika Script</a>
+      </div>
       <p class="muted" style="margin-top:0.75rem">Endpoint embedded: <span class="mono">{{ settings.wg_endpoint }}</span></p>
     {% else %}
       <p class="muted">Download the OpenVPN client profile (TCP).</p>
@@ -50,6 +53,38 @@
     {% endif %}
   </div>
 </div>
+
+{% if site.vpn_type == 'wireguard' %}
+<div class="panel">
+  <h2>Teltonika Router Setup</h2>
+  <p class="muted">For Teltonika RUT/RUTX routers running RutOS, copy or download this UCI configuration script. SSH into the router and run it to configure WireGuard with 1:1 NETMAP.</p>
+  <div class="tabs" id="setup-tabs">
+    <button type="button" class="tab-btn active" onclick="showTab('script-tab')">Script</button>
+    <button type="button" class="tab-btn" onclick="showTab('instructions-tab')">Instructions</button>
+  </div>
+  <div id="script-tab" class="tab-content">
+    <pre class="cmd" id="teltonika-script" style="max-height: 400px; overflow-y: auto;">#!/bin/sh
+# Teltonika RutOS WireGuard Configuration Script
+# Site tunnel IP: {{ site.wg_tunnel_ip }}
+# Virtual subnet: {{ site.virtual_subnet }} -> Local subnet: {{ site.local_subnet }}
+# Download the full script: /sites/{{ site.id }}/teltonika.txt</pre>
+    <div class="row" style="margin-top: 0.75rem;">
+      <a class="btn" href="/sites/{{ site.id }}/teltonika.txt">Download Script</a>
+      <button type="button" class="secondary copy-btn" onclick="copyTeltonikaScript()">Copy Script</button>
+    </div>
+  </div>
+  <div id="instructions-tab" class="tab-content" style="display: none;">
+    <ol style="color: var(--muted); line-height: 1.8;">
+      <li>Download the script using the button above</li>
+      <li>SSH into your Teltonika router: <code class="mono">ssh root@192.168.1.1</code></li>
+      <li>Upload and run the script: <code class="mono">sh /tmp/{{ site.site_code }}-teltonika.txt</code></li>
+      <li>The router will restart networking and firewall services</li>
+      <li>Verify the tunnel is up: <code class="mono">wg show</code></li>
+    </ol>
+    <p class="muted" style="margin-top: 1rem;"><strong>Note:</strong> The script configures 1:1 NETMAP so devices at <span class="mono">{{ site.local_subnet }}</span> become reachable at <span class="mono">{{ site.virtual_subnet }}</span>.</p>
+  </div>
+</div>
+{% endif %}
 
 <div class="panel">
   <h2>Device IP cheat sheet</h2>
@@ -104,4 +139,25 @@
     <div><button type="submit">Add to cheat sheet</button></div>
   </form>
 </div>
+
+{% if site.vpn_type == 'wireguard' %}
+<script>
+function showTab(tabId) {
+  document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById(tabId).style.display = 'block';
+  event.target.classList.add('active');
+}
+
+async function copyTeltonikaScript() {
+  try {
+    const response = await fetch('/sites/{{ site.id }}/teltonika.txt');
+    const script = await response.text();
+    await navigator.clipboard.writeText(script);
+  } catch (e) {
+    console.error('Copy failed:', e);
+  }
+}
+</script>
+{% endif %}
 {% endblock %}
