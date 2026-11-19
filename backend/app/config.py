@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:////data/relay.db"
     admin_password: str = "parktech"
     http_only: bool = True
+    api_token: str = ""  # Optional bearer token for API access
 
     public_ui_url: str = "http://127.0.0.1:8000"
     headscale_url: str = "http://127.0.0.1:8080"
