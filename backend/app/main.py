@@ -27,6 +27,7 @@ from app.services.provision import (
     poll_site_status,
     reconcile_wireguard_peers,
     tailscale_join_cmd,
+    teltonika_uci_script,
     wireguard_client_conf,
 )
 
@@ -368,6 +369,24 @@ def download_ovpn(request: Request, site_id: int, db: Session = Depends(get_db))
         conf,
         media_type="application/x-openvpn-profile",
         headers={"Content-Disposition": f'attachment; filename="{site.site_code}.ovpn"'},
+    )
+
+
+@app.get("/sites/{site_id}/teltonika.txt")
+def download_teltonika(request: Request, site_id: int, db: Session = Depends(get_db)):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    site = db.get(Site, site_id)
+    if not site or site.vpn_type != "wireguard":
+        raise HTTPException(404, "Teltonika config only available for WireGuard sites")
+    try:
+        script = teltonika_uci_script(db, site)
+    except Exception as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return PlainTextResponse(
+        script,
+        media_type="text/plain",
+        headers={"Content-Disposition": f'attachment; filename="{site.site_code}-teltonika.txt"'},
     )
 
 
