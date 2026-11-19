@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Fleet · ParkTech Relay{% endblock %}
+{% block body %}
+<header class="app">
+  <div class="brand">
+    <strong>{{ settings.operator_name }}</strong>
+    <span>ParkTech Relay · unified virtual IPs {{ settings.base_cidr }}</span>
+  </div>
+  <nav>
+    <a class="btn" href="/sites/new">Add site</a>
+    <a href="/settings">Settings</a>
+    <form method="post" action="/logout" style="display:inline"><button class="secondary" type="submit">Logout</button></form>
+  </nav>
+</header>
+
+<div class="grid two">
+  <div class="panel">
+    <h3>Control plane</h3>
+    <p class="muted mono">UI: {{ settings.public_ui_url }}</p>
+    <p class="muted">Headscale: {% if headscale_ready %}<span class="badge online">ready</span>{% else %}<span class="badge offline">not ready</span>{% endif %} · {{ settings.headscale_url }}</p>
+    <p class="muted">OpenVPN PKI: {% if openvpn_ready %}<span class="badge online">ready</span>{% else %}<span class="badge offline">waiting</span>{% endif %}</p>
+    <p class="muted">WG dry-run={{ cfg.wg_dry_run }} · NFT dry-run={{ cfg.nft_dry_run }}</p>
+  </div>
+  <div class="panel">
+    <h3>Filter by VPN</h3>
+    <div class="row">
+      <a class="btn secondary" href="/">All</a>
+      <a class="btn secondary" href="/?vpn_type=tailscale">Tailscale</a>
+      <a class="btn secondary" href="/?vpn_type=wireguard">WireGuard</a>
+      <a class="btn secondary" href="/?vpn_type=openvpn">OpenVPN</a>
+    </div>
+    <p class="muted" style="margin-top:0.75rem">Access path is always <span class="mono">10.101.X.Y</span> — VPN type only changes the tunnel.</p>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Fleet{% if vpn_filter %} · {{ vpn_filter }}{% endif %}</h2>
+  {% if not sites %}
+    <p class="muted">No sites yet. <a href="/sites/new">Create the first site</a>.</p>
+  {% else %}
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Site</th>
+        <th>VPN</th>
+        <th>Virtual subnet</th>
+        <th>Local LAN</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for site in sites %}
+      <tr>
+        <td>
+          <a href="/sites/{{ site.id }}"><strong>{{ site.name }}</strong></a><br>
+          <span class="muted mono">{{ site.site_code }}</span>
+        </td>
+        <td><span class="badge {{ 'ts' if site.vpn_type=='tailscale' else 'wg' if site.vpn_type=='wireguard' else 'ovpn' }}">{{ site.vpn_type }}</span></td>
+        <td class="mono">{{ site.virtual_subnet }}</td>
+        <td class="mono">{{ site.local_subnet }}</td>
+        <td>
+          {% if site.online %}<span class="badge online">Online</span>{% else %}<span class="badge offline">Offline</span>{% endif %}
+          {% if site.last_seen %}<div class="muted" style="font-size:0.75rem">{{ site.last_seen }}</div>{% endif %}
+        </td>
+        <td><a href="/sites/{{ site.id }}">Open</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

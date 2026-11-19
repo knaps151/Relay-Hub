@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}New site · ParkTech Relay{% endblock %}
+{% block body %}
+<header class="app">
+  <div class="brand">
+    <strong>Add site</strong>
+    <span>Same virtual IP plan for every VPN type</span>
+  </div>
+  <nav><a href="/">Back to fleet</a></nav>
+</header>
+
+<div class="panel">
+  {% if error %}<div class="flash-error">{{ error }}</div>{% endif %}
+  <form method="post" action="/sites/new" class="form-stack">
+    <div>
+      <label>Site name</label>
+      <input name="name" placeholder="North Street Car Park" required>
+    </div>
+    <div>
+      <label>Site code (optional)</label>
+      <input name="site_code" placeholder="north-street">
+    </div>
+    <div>
+      <label>VPN transport</label>
+      <select name="vpn_type" required>
+        <option value="tailscale">Tailscale (Headscale) — best for 4G / NAT</option>
+        <option value="wireguard">WireGuard — high speed hub-and-spoke</option>
+        <option value="openvpn">OpenVPN — strict firewalls (TCP)</option>
+      </select>
+    </div>
+    <div>
+      <label>Local LAN subnet</label>
+      <input name="local_subnet" value="192.168.1.0/24" required>
+    </div>
+    <p class="muted">Next free virtual subnet will be carved from <span class="mono">{{ settings.base_cidr }}</span> (e.g. 10.101.0.0/24, 10.101.1.0/24, …).</p>
+    <button type="submit">Create site</button>
+  </form>
+</div>
+{% endblock %}

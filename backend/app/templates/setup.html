@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Settings · ParkTech Relay{% endblock %}
+{% block body %}
+<header class="app">
+  <div class="brand">
+    <strong>ParkTech Relay</strong>
+    <span>{% if settings.setup_completed %}Hub settings{% else %}First-run setup{% endif %}</span>
+  </div>
+  {% if settings.setup_completed %}
+  <nav>
+    <a href="/">Fleet</a>
+    <form method="post" action="/logout" style="display:inline"><button class="secondary" type="submit">Logout</button></form>
+  </nav>
+  {% endif %}
+</header>
+
+<div class="panel">
+  <p class="muted">Keep UI / Headscale / WireGuard / OpenVPN endpoints separate — especially when using ngrok for the dashboard only.</p>
+  <form method="post" action="/setup" class="form-stack">
+    <div>
+      <label>Operator name</label>
+      <input name="operator_name" value="{{ settings.operator_name }}" required>
+    </div>
+    <div>
+      <label>Domain (optional, for later Caddy / Let's Encrypt)</label>
+      <input name="domain" value="{{ settings.domain or '' }}" placeholder="relay.example.co.uk">
+    </div>
+    <div>
+      <label>Public UI URL (browser / ngrok)</label>
+      <input name="public_ui_url" value="{{ settings.public_ui_url }}" required>
+    </div>
+    <div>
+      <label>Headscale login-server URL</label>
+      <input name="headscale_url" value="{{ settings.headscale_url }}" required>
+    </div>
+    <div>
+      <label>WireGuard endpoint (host:port)</label>
+      <input name="wg_endpoint" value="{{ settings.wg_endpoint }}" required>
+    </div>
+    <div>
+      <label>OpenVPN endpoint (host:port)</label>
+      <input name="openvpn_endpoint" value="{{ settings.openvpn_endpoint }}" required>
+    </div>
+    <div>
+      <label>Virtual base CIDR (shared IP plan)</label>
+      <input name="base_cidr" value="{{ settings.base_cidr }}" required>
+    </div>
+    <button type="submit">Save and continue</button>
+  </form>
+</div>
+{% endblock %}

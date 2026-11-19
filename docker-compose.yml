@@ -1,0 +1,117 @@
+services:
+  headscale:
+    image: headscale/headscale:0.25.1
+    container_name: parktech-headscale
+    restart: unless-stopped
+    command: serve
+    volumes:
+      - ./headscale/config.yaml:/etc/headscale/config.yaml:ro
+      - headscale-data:/var/lib/headscale
+      - headscale-run:/var/run/headscale
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    networks:
+      - relay
+
+  api:
+    build: ./backend
+    container_name: parktech-api
+    restart: unless-stopped
+    depends_on:
+      - headscale
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: sqlite:////data/relay.db
+      HEADSCALE_API_URL: http://headscale:8080
+      HEADSCALE_API_KEY_FILE: /data/headscale-api.key
+      HEADSCALE_SOCKET: /var/run/headscale/headscale.sock
+      OPENVPN_PKI_DIR: /vpn/pki
+      OPENVPN_CCD_DIR: /vpn/ccd
+      OPENVPN_STATUS_FILE: /vpn/openvpn-status.log
+      WG_INTERFACE: wg0
+      WG_LISTEN_PORT: "51820"
+      WG_HUB_ADDRESS: 10.100.0.1/24
+      HTTP_ONLY: ${HTTP_ONLY:-1}
+      WG_DRY_RUN: ${WG_DRY_RUN:-1}
+      NFT_DRY_RUN: ${NFT_DRY_RUN:-1}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-parktech}
+      PUBLIC_UI_URL: ${PUBLIC_UI_URL:-http://127.0.0.1:8000}
+      HEADSCALE_URL: ${HEADSCALE_URL:-http://127.0.0.1:8080}
+      WG_ENDPOINT: ${WG_ENDPOINT:-127.0.0.1:51820}
+      OPENVPN_ENDPOINT: ${OPENVPN_ENDPOINT:-127.0.0.1:1194}
+    volumes:
+      - ./data:/data
+      - headscale-run:/var/run/headscale
+      - openvpn-data:/vpn
+      - ./scripts:/scripts:ro
+      - ./headscale/config.yaml:/etc/headscale/config.yaml:ro
+    ports:
+      - "8000:8000"
+      - "51820:51820/udp"
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    sysctls:
+      - net.ipv4.ip_forward=1
+    networks:
+      - relay
+
+  openvpn:
+    build: ./openvpn
+    container_name: parktech-openvpn
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      OVPN_PORT: "1194"
+      OVPN_PROTO: tcp
+      OVPN_NETWORK: 10.100.1.0
+      OVPN_NETMASK: 255.255.255.0
+      OVPN_SERVER_CN: parktech-relay
+    volumes:
+      - openvpn-data:/vpn
+    ports:
+      - "1194:1194/tcp"
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    sysctls:
+      - net.ipv4.ip_forward=1
+    networks:
+      - relay
+
+  caddy:
+    image: caddy:2.9-alpine
+    container_name: parktech-caddy
+    profiles: ["caddy"]
+    restart: unless-stopped
+    depends_on:
+      - api
+      - headscale
+    environment:
+      RELAY_DOMAIN: ${RELAY_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - relay
+
+volumes:
+  headscale-data:
+  headscale-run:
+  openvpn-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  relay:
+    driver: bridge

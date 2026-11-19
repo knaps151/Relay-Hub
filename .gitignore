@@ -1,0 +1,10 @@
+.env
+data/*
+!data/.gitkeep
+**/__pycache__/
+*.pyc
+.venv/
+vpn/
+*.ovpn
+!.env.example
+.DS_Store

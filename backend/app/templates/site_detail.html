@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}{{ site.name }} · ParkTech Relay{% endblock %}
+{% block body %}
+<header class="app">
+  <div class="brand">
+    <strong>{{ site.name }}</strong>
+    <span>
+      <span class="badge {{ 'ts' if site.vpn_type=='tailscale' else 'wg' if site.vpn_type=='wireguard' else 'ovpn' }}">{{ site.vpn_type }}</span>
+      {% if site.online %}<span class="badge online">Online</span>{% else %}<span class="badge offline">Offline</span>{% endif %}
+      · virtual <span class="mono">{{ site.virtual_subnet }}</span>
+    </span>
+  </div>
+  <nav>
+    <a href="/">Fleet</a>
+    <form method="post" action="/sites/{{ site.id }}/delete" style="display:inline" onsubmit="return confirm('Delete this site?')">
+      <button class="danger" type="submit">Delete</button>
+    </form>
+  </nav>
+</header>
+
+<div class="grid two">
+  <div class="panel">
+    <h3>Access model</h3>
+    <p>Local LAN <span class="mono">{{ site.local_subnet }}</span> maps 1:1 onto <span class="mono">{{ site.virtual_subnet }}</span>.</p>
+    <p class="muted">Engineers always use the virtual IPs below — not Tailscale 100.x, WG tunnel IPs, or OpenVPN client IPs.</p>
+    {% if site.notes %}<div class="flash-error">{{ site.notes }}</div>{% endif %}
+  </div>
+  <div class="panel">
+    <h3>Tunnel setup</h3>
+    {% if site.vpn_type == 'tailscale' %}
+      <p class="muted">Join the site edge with Tailscale against Headscale, advertising the virtual subnet:</p>
+      <pre class="cmd" id="join-cmd">{{ join_cmd }}</pre>
+      <div class="row">
+        <button type="button" class="secondary copy-btn" onclick="copyText(document.getElementById('join-cmd').innerText)">Copy command</button>
+        <form method="post" action="/sites/{{ site.id }}/tailscale/refresh-key">
+          <button class="secondary" type="submit">Refresh pre-auth key</button>
+        </form>
+      </div>
+      <p class="muted" style="margin-top:0.75rem">On the site host, also run <span class="mono">scripts/site-netmap-example.sh {{ site.virtual_subnet }} {{ site.local_subnet }}</span> then approve routes.</p>
+    {% elif site.vpn_type == 'wireguard' %}
+      <p class="muted">Download the peer config and import on the site router / <span class="mono">wg-quick</span>.</p>
+      <p class="mono">Tunnel IP: {{ site.wg_tunnel_ip }}</p>
+      <a class="btn" href="/sites/{{ site.id }}/wireguard.conf">Download .conf</a>
+      <p class="muted" style="margin-top:0.75rem">Endpoint embedded: <span class="mono">{{ settings.wg_endpoint }}</span></p>
+    {% else %}
+      <p class="muted">Download the OpenVPN client profile (TCP).</p>
+      <p class="mono">CN: {{ site.ovpn_common_name }} · client IP {{ site.ovpn_client_ip }}</p>
+      <a class="btn" href="/sites/{{ site.id }}/client.ovpn">Download .ovpn</a>
+      <p class="muted" style="margin-top:0.75rem">Endpoint embedded: <span class="mono">{{ settings.openvpn_endpoint }}</span></p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Device IP cheat sheet</h2>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Equipment</th>
+        <th>Type</th>
+        <th>Local IP</th>
+        <th>Reachable VPN IP</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in site.devices %}
+      <tr>
+        <td>{{ d.label }}</td>
+        <td class="muted">{{ d.device_type }}</td>
+        <td class="mono">{{ d.local_ip }}</td>
+        <td class="mono">{{ d.virtual_ip }}</td>
+        <td class="row">
+          <button type="button" class="secondary copy-btn" onclick="copyText('{{ d.virtual_ip }}')">Copy IP</button>
+          {% if d.admin_port %}
+          <a class="btn secondary" href="http://{{ d.virtual_ip }}:{{ d.admin_port }}" target="_blank" rel="noopener">Open UI</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="panel">
+  <h3>Add device</h3>
+  <form method="post" action="/sites/{{ site.id }}/devices" class="grid two">
+    <div>
+      <label>Label</label>
+      <input name="label" placeholder="Entry ANPR Camera" required>
+    </div>
+    <div>
+      <label>Device type</label>
+      <input name="device_type" value="generic">
+    </div>
+    <div>
+      <label>Local IP</label>
+      <input name="local_ip" placeholder="192.168.1.2" required>
+    </div>
+    <div>
+      <label>Admin port (optional)</label>
+      <input name="admin_port" placeholder="80">
+    </div>
+    <div><button type="submit">Add to cheat sheet</button></div>
+  </form>
+</div>
+{% endblock %}
