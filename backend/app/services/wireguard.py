@@ -26,11 +26,14 @@ def _run(cmd: list[str], dry_run: bool = False) -> subprocess.CompletedProcess[s
     if dry_run:
         logger.info("DRY_RUN: %s", " ".join(cmd))
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
-    return subprocess.run(cmd, check=False, capture_output=True, text=True)
+    try:
+        return subprocess.run(cmd, check=False, capture_output=True, text=True)
+    except FileNotFoundError:
+        return subprocess.CompletedProcess(cmd, 127, stdout="", stderr=f"{cmd[0]}: command not found")
 
 
 def generate_keypair() -> tuple[str, str]:
-    """Return (private_key, public_key) using wg if available, else openssl fallback."""
+    """Return (private_key, public_key) using wg if available, else cryptography X25519 fallback."""
     priv = _run(["wg", "genkey"])
     if priv.returncode == 0 and priv.stdout.strip():
         private_key = priv.stdout.strip()
@@ -44,15 +47,53 @@ def generate_keypair() -> tuple[str, str]:
         if pub.returncode == 0:
             return private_key, pub.stdout.strip()
 
-    # Fallback: Curve25519 via openssl (not identical tooling but fine for dry-run POC on Mac images)
-    # Prefer real wg; if missing, synthesize placeholder keys for UI/config generation tests.
+    # Fallback: proper X25519 keypair via cryptography library
+    # WireGuard keys are Curve25519: private key is 32 random bytes (clamped by X25519),
+    # public key is derived via scalar multiplication.
     import base64
-    import os
 
-    private_key = base64.b64encode(os.urandom(32)).decode()
-    public_key = base64.b64encode(os.urandom(32)).decode()
-    logger.warning("wg binary unavailable; generated placeholder keys")
+    from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding,
+        NoEncryption,
+        PrivateFormat,
+        PublicFormat,
+    )
+
+    private_key_obj = X25519PrivateKey.generate()
+    # Raw format gives us the 32-byte key that WireGuard expects
+    private_bytes = private_key_obj.private_bytes(
+        encoding=Encoding.Raw,
+        format=PrivateFormat.Raw,
+        encryption_algorithm=NoEncryption(),
+    )
+    public_bytes = private_key_obj.public_key().public_bytes(
+        encoding=Encoding.Raw,
+        format=PublicFormat.Raw,
+    )
+    private_key = base64.b64encode(private_bytes).decode()
+    public_key = base64.b64encode(public_bytes).decode()
+    logger.info("wg binary unavailable; generated X25519 keypair via cryptography")
     return private_key, public_key
+
+
+def public_key_from_private(private_key_b64: str) -> str:
+    """Derive the WireGuard public key from a base64-encoded private key."""
+    import base64
+
+    from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding,
+        PublicFormat,
+    )
+
+    private_bytes = base64.b64decode(private_key_b64)
+    private_key_obj = X25519PrivateKey.from_private_bytes(private_bytes)
+    public_bytes = private_key_obj.public_key().public_bytes(
+        encoding=Encoding.Raw,
+        format=PublicFormat.Raw,
+    )
+    return base64.b64encode(public_bytes).decode()
 
 
 def ensure_hub_interface(private_key: str) -> None:

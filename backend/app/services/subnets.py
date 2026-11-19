@@ -17,9 +17,22 @@ def parse_base_cidr(base_cidr: str) -> ipaddress.IPv4Network:
     return network
 
 
+MAX_SITE_INDEX = 254  # 10.101.255.0/24 is reserved
+
+
 def next_site_index(db: Session) -> int:
-    rows = db.scalars(select(Site.site_index)).all()
-    return (max(rows) + 1) if rows else 0
+    """Return the lowest unused site index (0-254). Index 255 is reserved."""
+    rows = set(db.scalars(select(Site.site_index)).all())
+    if not rows:
+        return 0
+    # Find lowest unused index
+    for i in range(MAX_SITE_INDEX + 1):
+        if i not in rows:
+            return i
+    raise ValueError(
+        f"No free site indices available (max {MAX_SITE_INDEX}). "
+        "Delete unused sites to free indices. 10.101.255.0/24 is reserved."
+    )
 
 
 def allocate_virtual_subnet(db: Session, base_cidr: str) -> tuple[int, str]:
