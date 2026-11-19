@@ -77,6 +77,16 @@ button.danger { background: var(--danger); color: white; }
 .mono { font-family: var(--mono); font-size: 0.85rem; }
 .muted { color: var(--muted); }
 .flash-error { background: color-mix(in srgb, var(--danger) 20%, transparent); border: 1px solid var(--danger); padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem; }
+.security-banner {
+  background: var(--danger);
+  color: white;
+  padding: 0.75rem 1.25rem;
+  font-weight: 600;
+  text-align: center;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
 pre.cmd {
   background: #0b1015; border: 1px solid var(--border); border-radius: 8px;
   padding: 0.85rem; overflow-x: auto; white-space: pre-wrap; word-break: break-all;
