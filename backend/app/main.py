@@ -37,6 +37,23 @@ BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
+def _is_insecure_config() -> bool:
+    """Check if the app is running with an insecure configuration."""
+    cfg = get_settings()
+    # Insecure if using default password AND not in HTTP_ONLY mode (i.e., production)
+    return cfg.admin_password == "parktech" and not cfg.http_only
+
+
+def _security_warning() -> str | None:
+    """Return a security warning message if applicable."""
+    if _is_insecure_config():
+        return (
+            "SECURITY WARNING: You are using the default password 'parktech' "
+            "in production mode (HTTP_ONLY=0). Change ADMIN_PASSWORD in .env immediately!"
+        )
+    return None
+
+
 async def _background_loops() -> None:
     cfg = get_settings()
     while True:
@@ -171,6 +188,7 @@ def dashboard(
             "headscale_ready": hs_ready,
             "openvpn_ready": openvpn.pki_ready(),
             "cfg": get_settings(),
+            "security_warning": _security_warning(),
         },
     )
 
@@ -183,7 +201,7 @@ def setup_form(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(
         request,
         "setup.html",
-        {"settings": settings},
+        {"settings": settings, "security_warning": _security_warning()},
     )
 
 
@@ -222,7 +240,7 @@ def site_new_form(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(
         request,
         "site_new.html",
-        {"settings": settings, "error": None},
+        {"settings": settings, "error": None, "security_warning": _security_warning()},
     )
 
 
@@ -250,7 +268,7 @@ def site_new(
         return templates.TemplateResponse(
             request,
             "site_new.html",
-            {"settings": settings, "error": str(exc)},
+            {"settings": settings, "error": str(exc), "security_warning": _security_warning()},
             status_code=400,
         )
     return RedirectResponse(f"/sites/{site.id}", status_code=303)
@@ -277,6 +295,7 @@ def site_detail(request: Request, site_id: int, db: Session = Depends(get_db)):
             "site": site,
             "join_cmd": join_cmd,
             "cfg": get_settings(),
+            "security_warning": _security_warning(),
         },
     )
 
@@ -366,4 +385,6 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
     if not _authed(request):
         return RedirectResponse("/login", status_code=303)
     settings = get_or_create_settings(db)
-    return templates.TemplateResponse(request, "setup.html", {"settings": settings})
+    return templates.TemplateResponse(
+        request, "setup.html", {"settings": settings, "security_warning": _security_warning()}
+    )

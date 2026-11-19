@@ -11,6 +11,11 @@
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
 </head>
 <body>
+  {% if security_warning %}
+  <div class="security-banner">
+    ⚠️ {{ security_warning }}
+  </div>
+  {% endif %}
   <div class="wrap">
     {% block body %}{% endblock %}
   </div>
