@@ -85,3 +85,19 @@ class HubState(Base):
     wg_private_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     wg_public_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Engineer(Base):
+    """
+    Field engineer with WireGuard access to all sites.
+    Engineers get IPs from 10.100.2.0/24 (starting at .10).
+    """
+    __tablename__ = "engineers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(200))
+    wg_private_key: Mapped[str] = mapped_column(Text)
+    wg_public_key: Mapped[str] = mapped_column(String(128))
+    assigned_ip: Mapped[str] = mapped_column(String(64))  # e.g., 10.100.2.10/32
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

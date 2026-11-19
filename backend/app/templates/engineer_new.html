@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Add Engineer · ParkTech Relay{% endblock %}
+{% block body %}
+<header class="app">
+  <div class="brand">
+    <strong>Add Engineer</strong>
+    <span>Create WireGuard access for a field engineer</span>
+  </div>
+  <nav>
+    <a href="/engineers">← Engineers</a>
+    <a href="/">Fleet</a>
+  </nav>
+</header>
+
+<div class="panel">
+  {% if error %}
+  <div class="flash-error">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" action="/engineers/new" class="form-stack" style="max-width: 400px;">
+    <div>
+      <label>Engineer Name</label>
+      <input name="name" placeholder="John Smith" required autofocus>
+      <p class="muted" style="margin-top: 0.35rem;">A WireGuard keypair and IP will be automatically generated.</p>
+    </div>
+    <div>
+      <button type="submit">Create Engineer</button>
+    </div>
+  </form>
+</div>
+
+<div class="panel">
+  <h3>About Engineer Access</h3>
+  <ul style="color: var(--muted); line-height: 1.8;">
+    <li>Engineers get IPs from <span class="mono">10.100.2.0/24</span> (starting at .10)</li>
+    <li>Their WireGuard config allows access to all sites: <span class="mono">10.101.0.0/16</span></li>
+    <li>They can also reach hub WireGuard peers: <span class="mono">10.100.0.0/22</span></li>
+    <li>Disable an engineer to revoke access without deleting their record</li>
+  </ul>
+</div>
+{% endblock %}

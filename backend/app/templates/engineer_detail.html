@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}{{ engineer.name }} · ParkTech Relay{% endblock %}
+{% block body %}
+<header class="app">
+  <div class="brand">
+    <strong>{{ engineer.name }}</strong>
+    <span>
+      {% if engineer.enabled %}
+        <span class="badge online">Enabled</span>
+      {% else %}
+        <span class="badge offline">Disabled</span>
+      {% endif %}
+      · <span class="mono">{{ engineer.assigned_ip }}</span>
+    </span>
+  </div>
+  <nav>
+    <a href="/engineers">← Engineers</a>
+    <a href="/">Fleet</a>
+  </nav>
+</header>
+
+<div class="grid two">
+  <div class="panel">
+    <h3>Engineer Details</h3>
+    <p><strong>Name:</strong> {{ engineer.name }}</p>
+    <p><strong>Assigned IP:</strong> <span class="mono">{{ engineer.assigned_ip }}</span></p>
+    <p><strong>Created:</strong> {{ engineer.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+    <p><strong>Status:</strong>
+      {% if engineer.enabled %}
+        <span class="badge online">Enabled</span> — peer active on hub
+      {% else %}
+        <span class="badge offline">Disabled</span> — peer removed from hub
+      {% endif %}
+    </p>
+  </div>
+
+  <div class="panel">
+    <h3>Actions</h3>
+    <div class="row" style="flex-wrap: wrap; gap: 0.5rem;">
+      {% if engineer.enabled %}
+        <form method="post" action="/engineers/{{ engineer.id }}/disable">
+          <button type="submit" class="secondary">Disable Access</button>
+        </form>
+      {% else %}
+        <form method="post" action="/engineers/{{ engineer.id }}/enable">
+          <button type="submit">Enable Access</button>
+        </form>
+      {% endif %}
+      <form method="post" action="/engineers/{{ engineer.id }}/delete" onsubmit="return confirm('Delete this engineer? This cannot be undone.')">
+        <button type="submit" class="danger">Delete Engineer</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>WireGuard Configuration</h2>
+  <p class="muted">Download the config file and import it into the WireGuard app (iOS/Android/Windows/macOS/Linux).</p>
+
+  <div class="row" style="margin-top: 1rem;">
+    <a class="btn" href="/engineers/{{ engineer.id }}/wireguard.conf">Download .conf</a>
+    <button type="button" class="secondary copy-btn" onclick="copyEngineerConf()">Copy Config</button>
+  </div>
+
+  <div style="margin-top: 1.5rem;">
+    <h3>Config Preview</h3>
+    <pre class="cmd" id="engineer-conf">[Interface]
+PrivateKey = {{ engineer.wg_private_key[:20] }}...
+Address = {{ engineer.assigned_ip.split('/')[0] }}/32
+DNS = 1.1.1.1
+
+[Peer]
+PublicKey = (hub public key)
+Endpoint = {{ settings.wg_endpoint }}
+AllowedIPs = 10.101.0.0/16, 10.100.0.0/22
+PersistentKeepalive = 25</pre>
+  </div>
+
+  <div style="margin-top: 1.5rem;" id="qr-container">
+    <h3>QR Code</h3>
+    <p class="muted">Scan with the WireGuard mobile app to import the configuration.</p>
+    <canvas id="qr-canvas" style="display: none;"></canvas>
+    <div id="qr-output" style="margin-top: 0.5rem;"></div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>Access Scope</h3>
+  <p class="muted">This engineer can reach:</p>
+  <ul style="color: var(--muted); line-height: 1.8;">
+    <li><span class="mono">10.101.0.0/16</span> — All site virtual subnets (devices)</li>
+    <li><span class="mono">10.100.0.0/22</span> — Hub transit networks (WG, OpenVPN, engineers)</li>
+  </ul>
+  <p class="muted" style="margin-top: 1rem;"><strong>Note:</strong> For Tailscale sites, the hub routes traffic through Headscale. For WireGuard and OpenVPN sites, the hub forwards directly to those tunnels. Ensure the hub has routing enabled between all subnets.</p>
+</div>
+
+<script>
+async function copyEngineerConf() {
+  try {
+    const response = await fetch('/engineers/{{ engineer.id }}/wireguard.conf');
+    const conf = await response.text();
+    await navigator.clipboard.writeText(conf);
+  } catch (e) {
+    console.error('Copy failed:', e);
+  }
+}
+
+// Generate QR code if qrcode library is available
+(async function() {
+  try {
+    const response = await fetch('/engineers/{{ engineer.id }}/wireguard.conf');
+    const conf = await response.text();
+
+    // Load QR code library
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js';
+    script.onload = function() {
+      const output = document.getElementById('qr-output');
+      QRCode.toDataURL(conf, { width: 256, margin: 2 })
+        .then(url => {
+          output.innerHTML = '<img src="' + url + '" alt="WireGuard Config QR Code" style="border-radius: 8px; background: white; padding: 8px;">';
+        })
+        .catch(err => {
+          output.innerHTML = '<p class="muted">QR code generation failed</p>';
+        });
+    };
+    document.head.appendChild(script);
+  } catch (e) {
+    document.getElementById('qr-output').innerHTML = '<p class="muted">QR code unavailable</p>';
+  }
+})();
+</script>
+{% endblock %}
