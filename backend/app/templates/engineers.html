@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Engineers · ParkTech Relay{% endblock %}
+{% block body %}
+<header class="app">
+  <div class="brand">
+    <strong>Engineers</strong>
+    <span>WireGuard access for field engineers · 10.100.2.0/24</span>
+  </div>
+  <nav>
+    <a class="btn" href="/engineers/new">Add Engineer</a>
+    <a href="/">Fleet</a>
+    <form method="post" action="/logout" style="display:inline"><button class="secondary" type="submit">Logout</button></form>
+  </nav>
+</header>
+
+<div class="panel">
+  <p class="muted">Engineers can access all sites via WireGuard. Each engineer gets a unique IP from <span class="mono">10.100.2.0/24</span> and a downloadable <span class="mono">.conf</span> file for the WireGuard app.</p>
+</div>
+
+<div class="panel">
+  <h2>Engineer List</h2>
+  {% if not engineers %}
+    <p class="muted">No engineers yet. <a href="/engineers/new">Create the first engineer</a>.</p>
+  {% else %}
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Assigned IP</th>
+        <th>Status</th>
+        <th>Created</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for eng in engineers %}
+      <tr>
+        <td>
+          <a href="/engineers/{{ eng.id }}"><strong>{{ eng.name }}</strong></a>
+        </td>
+        <td class="mono">{{ eng.assigned_ip }}</td>
+        <td>
+          {% if eng.enabled %}
+            <span class="badge online">Enabled</span>
+          {% else %}
+            <span class="badge offline">Disabled</span>
+          {% endif %}
+        </td>
+        <td class="muted">{{ eng.created_at.strftime('%Y-%m-%d') }}</td>
+        <td><a href="/engineers/{{ eng.id }}">Manage</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

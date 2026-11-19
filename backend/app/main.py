@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.config import get_settings
 from app.db import SessionLocal, get_db, init_db
-from app.models import Site
+from app.models import Engineer, Site
 from app.services import openvpn
 from app.services.headscale import HeadscaleClient
 from app.services.provision import (
@@ -61,6 +61,9 @@ async def _background_loops() -> None:
         try:
             reconcile_wireguard_peers(db)
             poll_site_status(db)
+            # Reconcile engineer peers
+            from app.services.engineers import reconcile_engineer_peers
+            reconcile_engineer_peers(db)
         except Exception:
             logger.exception("background sync failed")
         finally:
@@ -387,4 +390,139 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
     settings = get_or_create_settings(db)
     return templates.TemplateResponse(
         request, "setup.html", {"settings": settings, "security_warning": _security_warning()}
+    )
+
+
+# --- Engineers ---
+
+@app.get("/engineers", response_class=HTMLResponse)
+def engineers_list(request: Request, db: Session = Depends(get_db)):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    settings = get_or_create_settings(db)
+    engineers = db.scalars(select(Engineer).order_by(Engineer.created_at)).all()
+    return templates.TemplateResponse(
+        request,
+        "engineers.html",
+        {
+            "settings": settings,
+            "engineers": engineers,
+            "security_warning": _security_warning(),
+        },
+    )
+
+
+@app.get("/engineers/new", response_class=HTMLResponse)
+def engineer_new_form(request: Request, db: Session = Depends(get_db)):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    settings = get_or_create_settings(db)
+    return templates.TemplateResponse(
+        request,
+        "engineer_new.html",
+        {"settings": settings, "error": None, "security_warning": _security_warning()},
+    )
+
+
+@app.post("/engineers/new")
+def engineer_new(
+    request: Request,
+    db: Session = Depends(get_db),
+    name: str = Form(...),
+):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+
+    from app.services.engineers import create_engineer
+
+    try:
+        engineer = create_engineer(db, name=name)
+    except Exception as exc:
+        settings = get_or_create_settings(db)
+        return templates.TemplateResponse(
+            request,
+            "engineer_new.html",
+            {"settings": settings, "error": str(exc), "security_warning": _security_warning()},
+            status_code=400,
+        )
+    return RedirectResponse(f"/engineers/{engineer.id}", status_code=303)
+
+
+@app.get("/engineers/{engineer_id}", response_class=HTMLResponse)
+def engineer_detail(request: Request, engineer_id: int, db: Session = Depends(get_db)):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    engineer = db.get(Engineer, engineer_id)
+    if not engineer:
+        raise HTTPException(404, "Engineer not found")
+    settings = get_or_create_settings(db)
+    return templates.TemplateResponse(
+        request,
+        "engineer_detail.html",
+        {
+            "settings": settings,
+            "engineer": engineer,
+            "security_warning": _security_warning(),
+        },
+    )
+
+
+@app.post("/engineers/{engineer_id}/enable")
+def engineer_enable(request: Request, engineer_id: int, db: Session = Depends(get_db)):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    engineer = db.get(Engineer, engineer_id)
+    if not engineer:
+        raise HTTPException(404)
+
+    from app.services.engineers import enable_engineer
+
+    enable_engineer(db, engineer)
+    return RedirectResponse(f"/engineers/{engineer_id}", status_code=303)
+
+
+@app.post("/engineers/{engineer_id}/disable")
+def engineer_disable(request: Request, engineer_id: int, db: Session = Depends(get_db)):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    engineer = db.get(Engineer, engineer_id)
+    if not engineer:
+        raise HTTPException(404)
+
+    from app.services.engineers import disable_engineer
+
+    disable_engineer(db, engineer)
+    return RedirectResponse(f"/engineers/{engineer_id}", status_code=303)
+
+
+@app.post("/engineers/{engineer_id}/delete")
+def engineer_delete(request: Request, engineer_id: int, db: Session = Depends(get_db)):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    engineer = db.get(Engineer, engineer_id)
+    if not engineer:
+        raise HTTPException(404)
+
+    from app.services.engineers import delete_engineer
+
+    delete_engineer(db, engineer)
+    return RedirectResponse("/engineers", status_code=303)
+
+
+@app.get("/engineers/{engineer_id}/wireguard.conf")
+def download_engineer_conf(request: Request, engineer_id: int, db: Session = Depends(get_db)):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    engineer = db.get(Engineer, engineer_id)
+    if not engineer:
+        raise HTTPException(404)
+
+    from app.services.engineers import render_engineer_conf
+
+    conf = render_engineer_conf(db, engineer)
+    filename = engineer.name.lower().replace(" ", "-")[:20] or "engineer"
+    return PlainTextResponse(
+        conf,
+        media_type="text/plain",
+        headers={"Content-Disposition": f'attachment; filename="{filename}.conf"'},
     )
