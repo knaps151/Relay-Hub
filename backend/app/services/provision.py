@@ -188,6 +188,26 @@ def wireguard_client_conf(db: Session, site: Site) -> str:
     )
 
 
+def teltonika_uci_script(db: Session, site: Site) -> str:
+    """Generate Teltonika RutOS UCI script for WireGuard site setup."""
+    from app.services.teltonika import render_teltonika_uci
+
+    settings = get_or_create_settings(db)
+    if site.vpn_type != "wireguard":
+        raise ValueError("Teltonika config only available for WireGuard sites")
+    if not site.wg_private_key or not site.wg_hub_public_key or not site.wg_tunnel_ip:
+        raise ValueError("Site is not a WireGuard site with keys")
+
+    return render_teltonika_uci(
+        site_private_key=site.wg_private_key,
+        site_tunnel_ip=site.wg_tunnel_ip,
+        hub_public_key=site.wg_hub_public_key,
+        hub_endpoint=settings.wg_endpoint,
+        virtual_subnet=site.virtual_subnet,
+        local_subnet=site.local_subnet,
+    )
+
+
 def openvpn_client_conf(site: Site) -> str:
     if not site.ovpn_common_name:
         raise ValueError("Not an OpenVPN site")
