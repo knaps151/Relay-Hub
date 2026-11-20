@@ -66,13 +66,13 @@
         <pre class="bg-light border rounded p-3 mono small mb-0" id="engineer-conf-preview">[Interface]
 PrivateKey = {{ engineer.wg_private_key[:20] }}...
 Address = {{ engineer.assigned_ip.split('/')[0] }}/32
-DNS = 1.1.1.1
 
 [Peer]
 PublicKey = (hub public key)
 Endpoint = {{ settings.wg_endpoint }}
-AllowedIPs = 10.101.0.0/16, 10.100.0.0/22
+AllowedIPs = 10.101.0.0/16,10.100.0.0/22
 PersistentKeepalive = 25</pre>
+        <p class="text-secondary small mt-2 mb-0">On phone: WireGuard → Create from QR, or Create from file (import the downloaded <span class="mono">.conf</span>). Do not paste into a blank tunnel manually.</p>
       </div>
       <div class="col-lg-5">
         <div class="qr-box" id="qr-output"></div>

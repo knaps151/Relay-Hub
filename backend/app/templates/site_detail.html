@@ -294,18 +294,28 @@
     preview.innerHTML = 'Reachable at <span class="mono">' + vip + '</span>';
   }
 
-  (function renderQr() {
+  (async function renderQr() {
     const el = document.getElementById('qrcode');
     if (!el || typeof QRCode === 'undefined') return;
     let payload = '';
     {% if site.vpn_type == 'tailscale' %}
     payload = document.getElementById('join-cmd')?.innerText || '';
     {% elif site.vpn_type == 'wireguard' %}
-    payload = window.location.origin + '/sites/{{ site.id }}/wireguard.conf';
+    try {
+      const response = await fetch('/sites/{{ site.id }}/wireguard.conf');
+      payload = await response.text();
+      if (!response.ok || payload.trim().startsWith('<')) {
+        el.textContent = 'QR unavailable — open this page while logged in';
+        return;
+      }
+    } catch (e) {
+      el.textContent = 'QR unavailable';
+      return;
+    }
     {% else %}
     payload = window.location.origin + '/sites/{{ site.id }}/client.ovpn';
     {% endif %}
-    QRCode.toCanvas(document.createElement('canvas'), payload, { width: 160, margin: 1 }, function (err, canvas) {
+    QRCode.toCanvas(document.createElement('canvas'), payload, { width: 180, margin: 1, errorCorrectionLevel: 'M' }, function (err, canvas) {
       if (err) { el.textContent = 'QR unavailable'; return; }
       el.innerHTML = '';
       el.appendChild(canvas);

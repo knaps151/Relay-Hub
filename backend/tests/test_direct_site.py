@@ -66,6 +66,8 @@ def test_direct_wireguard_conf_uses_virtual_address(db_session):
     device_ip = default_gateway_virtual_ip(site.virtual_subnet)
     assert f"Address = {device_ip}/32" in conf
     assert "AllowedIPs = 10.100.0.0/22" in conf
+    assert "DNS =" not in conf
+    assert ", " not in conf.split("AllowedIPs =", 1)[1].split("\n", 1)[0]
 
 
 def test_gateway_site_unchanged_defaults(db_session):

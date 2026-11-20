@@ -613,8 +613,11 @@ def download_wg(request: Request, site_id: int, db: Session = Depends(get_db)):
     record_config_download(db, site=site, config_type="wireguard.conf", source_ip=source_ip)
     return PlainTextResponse(
         conf,
-        media_type="text/plain",
-        headers={"Content-Disposition": f'attachment; filename="{site.site_code}.conf"'},
+        media_type="application/x-wireguard-profile",
+        headers={
+            "Content-Disposition": f'attachment; filename="{site.site_code}.conf"',
+            "Content-Type": "application/x-wireguard-profile; charset=utf-8",
+        },
     )
 
 
@@ -830,8 +833,11 @@ def download_engineer_conf(request: Request, engineer_id: int, db: Session = Dep
     filename = engineer.name.lower().replace(" ", "-")[:20] or "engineer"
     return PlainTextResponse(
         conf,
-        media_type="text/plain",
-        headers={"Content-Disposition": f'attachment; filename="{filename}.conf"'},
+        media_type="application/x-wireguard-profile",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}.conf"',
+            "Content-Type": "application/x-wireguard-profile; charset=utf-8",
+        },
     )
 
 

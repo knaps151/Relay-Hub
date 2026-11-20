@@ -123,15 +123,11 @@ def render_engineer_conf(db: Session, engineer: Engineer) -> str:
         raise ValueError("Hub WireGuard keys not configured")
 
     ip = engineer.assigned_ip.split("/")[0]
-
-    return f"""[Interface]
-PrivateKey = {engineer.wg_private_key}
-Address = {ip}/32
-DNS = 1.1.1.1
-
-[Peer]
-PublicKey = {hub.wg_public_key}
-Endpoint = {settings.wg_endpoint}
-AllowedIPs = 10.101.0.0/16, 10.100.0.0/22
-PersistentKeepalive = 25
-"""
+    return wireguard.render_client_conf(
+        client_private_key=engineer.wg_private_key,
+        client_address=f"{ip}/32",
+        hub_public_key=hub.wg_public_key,
+        hub_endpoint=settings.wg_endpoint,
+        allowed_ips="10.101.0.0/16,10.100.0.0/22",
+        include_dns=False,
+    )

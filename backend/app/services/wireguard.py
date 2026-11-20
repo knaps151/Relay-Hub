@@ -202,6 +202,12 @@ def parse_handshakes() -> list[PeerHandshake]:
     return peers
 
 
+def normalize_allowed_ips(allowed_ips: str) -> str:
+    """Comma-separate prefixes with no spaces — required by WireGuard mobile importers."""
+    parts = [p.strip() for p in allowed_ips.split(",") if p.strip()]
+    return ",".join(parts)
+
+
 def render_client_conf(
     *,
     client_private_key: str,
@@ -209,19 +215,34 @@ def render_client_conf(
     hub_public_key: str,
     hub_endpoint: str,
     allowed_ips: str,
+    include_dns: bool = False,
 ) -> str:
-    host_port = hub_endpoint
-    return f"""[Interface]
-PrivateKey = {client_private_key}
-Address = {client_address}
-DNS = 1.1.1.1
+    """Render a client/peer .conf suitable for desktop and mobile WireGuard apps.
 
-[Peer]
-PublicKey = {hub_public_key}
-Endpoint = {host_port}
-AllowedIPs = {allowed_ips}
-PersistentKeepalive = 25
-"""
+    Split-tunnel profiles omit DNS by default: setting DNS=1.1.1.1 without routing
+    1.1.1.1 through the tunnel makes iOS/Android reject or mis-handle the profile.
+    """
+    address = client_address if "/" in client_address else f"{client_address}/32"
+    allowed = normalize_allowed_ips(allowed_ips)
+    lines = [
+        "[Interface]",
+        f"PrivateKey = {client_private_key.strip()}",
+        f"Address = {address}",
+    ]
+    if include_dns:
+        lines.append("DNS = 1.1.1.1")
+    lines.extend(
+        [
+            "",
+            "[Peer]",
+            f"PublicKey = {hub_public_key.strip()}",
+            f"Endpoint = {hub_endpoint.strip()}",
+            f"AllowedIPs = {allowed}",
+            "PersistentKeepalive = 25",
+            "",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def handshake_is_online(latest: Optional[datetime], max_age_seconds: int = 180) -> bool:
