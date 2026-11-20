@@ -230,6 +230,7 @@ def render_client_conf(
         f"Address = {address}",
     ]
     if include_dns:
+        # UniFi Network VPN Client validates this strictly (DNS = 8.8.8.8 style)
         lines.append("DNS = 1.1.1.1")
     lines.extend(
         [

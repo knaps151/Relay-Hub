@@ -218,16 +218,21 @@ def wireguard_client_conf(db: Session, site: Site) -> str:
         raise ValueError("Site is not a WireGuard site with keys")
     if getattr(site, "access_mode", "gateway") == "direct":
         # Device address is the ParkTech virtual IP; reach hub + engineer pool
+        # Omit DNS — mobile WG apps reject/mis-handle DNS with split AllowedIPs
         allowed = "10.100.0.0/22"
+        include_dns = False
     else:
-        # Gateway router: hub WG net only (LAN stays local; NETMAP on hub)
+        # Gateway router (UniFi / Teltonika / wg-quick): hub WG net only
+        # UniFi VPN Client requires a valid DNS = x.x.x.x line on import
         allowed = "10.100.0.0/24"
+        include_dns = True
     return wireguard.render_client_conf(
         client_private_key=site.wg_private_key,
         client_address=site.wg_tunnel_ip,
         hub_public_key=site.wg_hub_public_key,
         hub_endpoint=settings.wg_endpoint,
         allowed_ips=allowed,
+        include_dns=include_dns,
     )
 
 

@@ -70,6 +70,19 @@ def test_direct_wireguard_conf_uses_virtual_address(db_session):
     assert ", " not in conf.split("AllowedIPs =", 1)[1].split("\n", 1)[0]
 
 
+def test_gateway_wireguard_conf_includes_dns_for_unifi(db_session):
+    site = create_site(
+        db_session,
+        name="UniFi Site",
+        vpn_type="wireguard",
+        access_mode="gateway",
+        local_subnet="10.0.0.0/24",
+    )
+    conf = wireguard_client_conf(db_session, site)
+    assert "DNS = 1.1.1.1" in conf
+    assert "AllowedIPs = 10.100.0.0/24" in conf
+
+
 def test_gateway_site_unchanged_defaults(db_session):
     site = create_site(
         db_session,
