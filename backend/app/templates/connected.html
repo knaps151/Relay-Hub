@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Connected · ParkTech Relay{% endblock %}
+{% block body %}
+<header class="app">
+  <div class="brand">
+    <strong>{{ settings.operator_name }}</strong>
+    <span>ParkTech Relay · Currently connected</span>
+  </div>
+  <nav>
+    <a href="/">Dashboard</a>
+    <a href="/engineers">Engineers</a>
+    <a href="/access-log">Access Log</a>
+    <a href="/settings">Settings</a>
+  </nav>
+</header>
+
+<div class="panel">
+  <h2>Live Sessions</h2>
+  {% if not sessions %}
+  <p class="muted">No active sessions.</p>
+  {% else %}
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Actor</th>
+        <th>Type</th>
+        <th>VPN</th>
+        <th>Endpoint</th>
+        <th>Last Handshake</th>
+        <th>Transfer</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in sessions %}
+      <tr>
+        <td>
+          <strong>{{ s.actor_name }}</strong><br>
+          <span class="muted">{{ s.actor_type }}</span>
+        </td>
+        <td>
+          {% if s.actor_type == 'engineer' %}
+          <span class="badge wg">Engineer</span>
+          {% else %}
+          <span class="badge ts">Site</span>
+          {% endif %}
+        </td>
+        <td>
+          <span class="badge {{ 'ts' if s.vpn_type=='tailscale' else 'wg' if s.vpn_type=='wireguard' else 'ovpn' }}">{{ s.vpn_type }}</span>
+        </td>
+        <td class="mono">{{ s.endpoint or '—' }}</td>
+        <td>{{ s.last_handshake.strftime('%Y-%m-%d %H:%M:%S') if s.last_handshake else '—' }}</td>
+        <td class="mono">↓{{ (s.transfer_rx / 1024)|int }}KB ↑{{ (s.transfer_tx / 1024)|int }}KB</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  <p class="muted" style="margin-top:1rem">This page shows currently connected VPN peers. Refresh to update.</p>
+</div>
+{% endblock %}

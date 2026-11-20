@@ -143,6 +143,38 @@
   </form>
 </div>
 
+{% if recent_events %}
+<div class="panel">
+  <h3>Recent access events</h3>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Event</th>
+        <th>Actor</th>
+        <th>Detail</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in recent_events %}
+      <tr>
+        <td class="mono" style="white-space:nowrap">{{ e.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>
+          {% if e.kind == 'config_download' %}<span class="badge">download</span>
+          {% elif 'connect' in e.kind or 'handshake' in e.kind %}<span class="badge online">connect</span>
+          {% elif 'disconnect' in e.kind %}<span class="badge offline">disconnect</span>
+          {% else %}<span class="badge">{{ e.kind }}</span>{% endif %}
+        </td>
+        <td>{{ e.actor_name }}</td>
+        <td class="muted">{{ e.detail or '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted" style="margin-top:0.5rem"><a href="/access-log?site_id={{ site.id }}">View full access log</a></p>
+</div>
+{% endif %}
+
 <script>
 const VIRTUAL_SUBNET = '{{ site.virtual_subnet }}';
 const LOCAL_SUBNET = '{{ site.local_subnet }}';

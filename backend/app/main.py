@@ -55,7 +55,11 @@ def _security_warning() -> str | None:
     return None
 
 
+_last_prune_date: str = ""
+
+
 async def _background_loops() -> None:
+    global _last_prune_date
     cfg = get_settings()
     while True:
         db = SessionLocal()
@@ -65,6 +69,16 @@ async def _background_loops() -> None:
             # Reconcile engineer peers
             from app.services.engineers import reconcile_engineer_peers
             reconcile_engineer_peers(db)
+            # Poll connection transitions for access log
+            from app.services.sessions import poll_connection_transitions
+            poll_connection_transitions(db)
+            # Daily pruning of old access events
+            from datetime import date
+            today = date.today().isoformat()
+            if today != _last_prune_date:
+                from app.services.audit import prune_old_events
+                prune_old_events(db)
+                _last_prune_date = today
         except Exception:
             logger.exception("background sync failed")
         finally:
@@ -147,6 +161,18 @@ def login(request: Request, password: str = Form(...)):
             {"error": "Invalid password"},
             status_code=401,
         )
+    # Record login event (best-effort, don't block login on audit failure)
+    try:
+        db = SessionLocal()
+        try:
+            from app.services.audit import record_login
+            source_ip = request.client.host if request.client else None
+            record_login(db, source_ip=source_ip)
+        finally:
+            db.close()
+    except Exception:
+        pass  # Audit failure shouldn't block login
+
     redirect = RedirectResponse("/", status_code=303)
     redirect.set_cookie("relay_session", "ok", httponly=True, samesite="lax")
     return redirect
@@ -295,6 +321,9 @@ def site_detail(request: Request, site_id: int, db: Session = Depends(get_db)):
     join_cmd = None
     if site.vpn_type == "tailscale":
         join_cmd = tailscale_join_cmd(db, site)
+    # Get recent access events for this site
+    from app.services.audit import get_site_recent_events
+    recent_events = get_site_recent_events(db, site_id=site.id, limit=10)
     return templates.TemplateResponse(
         request,
         "site_detail.html",
@@ -304,6 +333,7 @@ def site_detail(request: Request, site_id: int, db: Session = Depends(get_db)):
             "join_cmd": join_cmd,
             "cfg": get_settings(),
             "security_warning": _security_warning(),
+            "recent_events": recent_events,
         },
     )
 
@@ -347,6 +377,10 @@ def download_wg(request: Request, site_id: int, db: Session = Depends(get_db)):
     if not site or site.vpn_type != "wireguard":
         raise HTTPException(404)
     conf = wireguard_client_conf(db, site)
+    # Record config download
+    from app.services.audit import record_config_download
+    source_ip = request.client.host if request.client else None
+    record_config_download(db, site=site, config_type="wireguard.conf", source_ip=source_ip)
     return PlainTextResponse(
         conf,
         media_type="text/plain",
@@ -365,6 +399,10 @@ def download_ovpn(request: Request, site_id: int, db: Session = Depends(get_db))
         conf = openvpn_client_conf(site)
     except Exception as exc:
         raise HTTPException(400, str(exc)) from exc
+    # Record config download
+    from app.services.audit import record_config_download
+    source_ip = request.client.host if request.client else None
+    record_config_download(db, site=site, config_type="client.ovpn", source_ip=source_ip)
     return PlainTextResponse(
         conf,
         media_type="application/x-openvpn-profile",
@@ -383,6 +421,10 @@ def download_teltonika(request: Request, site_id: int, db: Session = Depends(get
         script = teltonika_uci_script(db, site)
     except Exception as exc:
         raise HTTPException(400, str(exc)) from exc
+    # Record config download
+    from app.services.audit import record_config_download
+    source_ip = request.client.host if request.client else None
+    record_config_download(db, site=site, config_type="teltonika.txt", source_ip=source_ip)
     return PlainTextResponse(
         script,
         media_type="text/plain",
@@ -543,9 +585,134 @@ def download_engineer_conf(request: Request, engineer_id: int, db: Session = Dep
     from app.services.engineers import render_engineer_conf
 
     conf = render_engineer_conf(db, engineer)
+    # Record config download
+    from app.services.audit import record_engineer_config_download
+    source_ip = request.client.host if request.client else None
+    record_engineer_config_download(db, engineer=engineer, source_ip=source_ip)
     filename = engineer.name.lower().replace(" ", "-")[:20] or "engineer"
     return PlainTextResponse(
         conf,
         media_type="text/plain",
         headers={"Content-Disposition": f'attachment; filename="{filename}.conf"'},
+    )
+
+
+# --- Connected / Access Log ---
+
+@app.get("/connected", response_class=HTMLResponse)
+def connected_page(request: Request, db: Session = Depends(get_db)):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    settings = get_or_create_settings(db)
+
+    from app.services.sessions import get_live_sessions
+
+    sessions = get_live_sessions(db)
+    return templates.TemplateResponse(
+        request,
+        "connected.html",
+        {
+            "settings": settings,
+            "sessions": sessions,
+            "security_warning": _security_warning(),
+        },
+    )
+
+
+@app.get("/access-log", response_class=HTMLResponse)
+def access_log_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    site_id: Optional[int] = Query(None),
+    engineer_id: Optional[int] = Query(None),
+    kind: Optional[str] = Query(None),
+    days: int = Query(7),
+):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    settings = get_or_create_settings(db)
+
+    from datetime import datetime, timedelta
+
+    from app.services.audit import get_recent_events
+
+    since = datetime.utcnow() - timedelta(days=days)
+    events = get_recent_events(
+        db,
+        site_id=site_id,
+        engineer_id=engineer_id,
+        kind=kind,
+        since=since,
+        limit=500,
+    )
+
+    # Get sites and engineers for filter dropdowns
+    sites = db.scalars(select(Site).order_by(Site.name)).all()
+    engineers = db.scalars(select(Engineer).order_by(Engineer.name)).all()
+
+    return templates.TemplateResponse(
+        request,
+        "access_log.html",
+        {
+            "settings": settings,
+            "events": events,
+            "sites": sites,
+            "engineers": engineers,
+            "filter_site_id": site_id,
+            "filter_engineer_id": engineer_id,
+            "filter_kind": kind,
+            "filter_days": days,
+            "security_warning": _security_warning(),
+        },
+    )
+
+
+@app.get("/access-log/export.csv")
+def access_log_export(
+    request: Request,
+    db: Session = Depends(get_db),
+    site_id: Optional[int] = Query(None),
+    engineer_id: Optional[int] = Query(None),
+    kind: Optional[str] = Query(None),
+    days: int = Query(90),
+):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+
+    from datetime import datetime, timedelta
+    import csv
+    import io
+
+    from app.services.audit import get_recent_events
+
+    since = datetime.utcnow() - timedelta(days=days)
+    events = get_recent_events(
+        db,
+        site_id=site_id,
+        engineer_id=engineer_id,
+        kind=kind,
+        since=since,
+        limit=10000,
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Timestamp", "Kind", "Actor Type", "Actor Name", "Site ID", "Device ID", "Source IP", "Detail"])
+    for e in events:
+        writer.writerow([
+            e.timestamp.isoformat() if e.timestamp else "",
+            e.kind,
+            e.actor_type,
+            e.actor_name,
+            e.site_id or "",
+            e.device_id or "",
+            e.source_ip or "",
+            e.detail or "",
+        ])
+
+    csv_content = output.getvalue()
+    return PlainTextResponse(
+        csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="access-log-{datetime.utcnow().strftime("%Y%m%d")}.csv"'},
     )

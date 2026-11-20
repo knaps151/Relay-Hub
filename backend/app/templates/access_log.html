@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Access Log · ParkTech Relay{% endblock %}
+{% block body %}
+<header class="app">
+  <div class="brand">
+    <strong>{{ settings.operator_name }}</strong>
+    <span>ParkTech Relay · Access log</span>
+  </div>
+  <nav>
+    <a href="/">Dashboard</a>
+    <a href="/engineers">Engineers</a>
+    <a href="/connected">Connected</a>
+    <a href="/settings">Settings</a>
+  </nav>
+</header>
+
+<div class="panel">
+  <h2>Access Log</h2>
+  <form method="get" action="/access-log" style="margin-bottom:1rem">
+    <div class="row" style="gap:0.5rem;flex-wrap:wrap;align-items:center">
+      <select name="days" style="width:auto">
+        <option value="1" {% if filter_days == 1 %}selected{% endif %}>Last 24h</option>
+        <option value="7" {% if filter_days == 7 %}selected{% endif %}>Last 7 days</option>
+        <option value="30" {% if filter_days == 30 %}selected{% endif %}>Last 30 days</option>
+        <option value="90" {% if filter_days == 90 %}selected{% endif %}>Last 90 days</option>
+      </select>
+      <select name="site_id" style="width:auto">
+        <option value="">All sites</option>
+        {% for site in sites %}
+        <option value="{{ site.id }}" {% if filter_site_id == site.id %}selected{% endif %}>{{ site.name }}</option>
+        {% endfor %}
+      </select>
+      <select name="engineer_id" style="width:auto">
+        <option value="">All engineers</option>
+        {% for eng in engineers %}
+        <option value="{{ eng.id }}" {% if filter_engineer_id == eng.id %}selected{% endif %}>{{ eng.name }}</option>
+        {% endfor %}
+      </select>
+      <select name="kind" style="width:auto">
+        <option value="">All events</option>
+        <option value="login" {% if filter_kind == 'login' %}selected{% endif %}>Login</option>
+        <option value="config_download" {% if filter_kind == 'config_download' %}selected{% endif %}>Config download</option>
+        <option value="wg_handshake" {% if filter_kind == 'wg_handshake' %}selected{% endif %}>WG connect</option>
+        <option value="wg_disconnect" {% if filter_kind == 'wg_disconnect' %}selected{% endif %}>WG disconnect</option>
+        <option value="ovpn_connect" {% if filter_kind == 'ovpn_connect' %}selected{% endif %}>OVPN connect</option>
+        <option value="ovpn_disconnect" {% if filter_kind == 'ovpn_disconnect' %}selected{% endif %}>OVPN disconnect</option>
+        <option value="ts_connect" {% if filter_kind == 'ts_connect' %}selected{% endif %}>TS connect</option>
+        <option value="ts_disconnect" {% if filter_kind == 'ts_disconnect' %}selected{% endif %}>TS disconnect</option>
+      </select>
+      <button type="submit" class="btn secondary">Filter</button>
+      <a href="/access-log/export.csv?days={{ filter_days }}{% if filter_site_id %}&site_id={{ filter_site_id }}{% endif %}{% if filter_engineer_id %}&engineer_id={{ filter_engineer_id }}{% endif %}{% if filter_kind %}&kind={{ filter_kind }}{% endif %}" class="btn secondary">Export CSV</a>
+    </div>
+  </form>
+
+  {% if not events %}
+  <p class="muted">No access events found for the selected filters.</p>
+  {% else %}
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Event</th>
+        <th>Actor</th>
+        <th>Site</th>
+        <th>Source IP</th>
+        <th>Detail</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in events %}
+      <tr>
+        <td class="mono" style="white-space:nowrap">{{ e.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>
+          {% if e.kind == 'login' %}<span class="badge">login</span>
+          {% elif e.kind == 'config_download' %}<span class="badge">download</span>
+          {% elif 'connect' in e.kind or 'handshake' in e.kind %}<span class="badge online">connect</span>
+          {% elif 'disconnect' in e.kind %}<span class="badge offline">disconnect</span>
+          {% else %}<span class="badge">{{ e.kind }}</span>{% endif %}
+        </td>
+        <td>
+          <strong>{{ e.actor_name }}</strong><br>
+          <span class="muted">{{ e.actor_type }}</span>
+        </td>
+        <td>{% if e.site_id %}<a href="/sites/{{ e.site_id }}">Site #{{ e.site_id }}</a>{% else %}—{% endif %}</td>
+        <td class="mono">{{ e.source_ip or '—' }}</td>
+        <td class="muted" style="font-size:0.8rem;max-width:200px;overflow:hidden;text-overflow:ellipsis">{{ e.detail or '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted" style="margin-top:1rem">Showing {{ events|length }} event(s).</p>
+  {% endif %}
+</div>
+{% endblock %}
