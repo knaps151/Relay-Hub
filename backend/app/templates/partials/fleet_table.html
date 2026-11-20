@@ -30,6 +30,9 @@
           </td>
           <td>{{ site.region or '—' }}</td>
           <td>
+            {% if site.access_mode == 'direct' %}
+            <span class="badge text-bg-success">Direct</span>
+            {% endif %}
             {% if site.vpn_type == 'tailscale' %}
             <span class="badge text-bg-info">Tailscale</span>
             {% elif site.vpn_type == 'wireguard' %}

@@ -14,20 +14,17 @@ services:
     networks:
       - relay
 
-  # Host networking so WireGuard UDP bypasses docker-proxy (required for real handshakes).
   api:
     build: ./backend
     container_name: parktech-api
     restart: unless-stopped
     depends_on:
       - headscale
-    network_mode: host
     env_file:
       - .env
     environment:
       DATABASE_URL: sqlite:////data/relay.db
-      # headscale publishes 8080 on the host; host-networked API reaches it via localhost
-      HEADSCALE_API_URL: http://127.0.0.1:8080
+      HEADSCALE_API_URL: http://headscale:8080
       HEADSCALE_API_KEY_FILE: /data/headscale-api.key
       HEADSCALE_SOCKET: /var/run/headscale/headscale.sock
       OPENVPN_PKI_DIR: /vpn/pki
@@ -50,11 +47,18 @@ services:
       - openvpn-data:/vpn
       - ./scripts:/scripts:ro
       - ./headscale/config.yaml:/etc/headscale/config.yaml:ro
+    ports:
+      - "8000:8000"
+      - "51820:51820/udp"
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
     devices:
       - /dev/net/tun:/dev/net/tun
+    sysctls:
+      - net.ipv4.ip_forward=1
+    networks:
+      - relay
 
   openvpn:
     build: ./openvpn
@@ -81,7 +85,6 @@ services:
     networks:
       - relay
 
-  # Same host network as API so HTTPS proxy can reach :8000 / :8080 on localhost.
   caddy:
     image: caddy:2.9-alpine
     container_name: parktech-caddy
@@ -90,13 +93,17 @@ services:
     depends_on:
       - api
       - headscale
-    network_mode: host
     environment:
       RELAY_DOMAIN: ${RELAY_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+    networks:
+      - relay
 
 volumes:
   headscale-data:

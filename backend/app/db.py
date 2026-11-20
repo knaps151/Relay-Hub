@@ -73,6 +73,7 @@ def run_schema_upgrades() -> None:
     # Add new column migrations here as needed
     column_migrations: list[tuple[str, str, str]] = [
         ("sites", "region", "region VARCHAR(120) DEFAULT ''"),
+        ("sites", "access_mode", "access_mode VARCHAR(32) DEFAULT 'gateway'"),
     ]
 
     for table_name, column_name, column_def in column_migrations:

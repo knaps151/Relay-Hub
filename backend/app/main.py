@@ -412,13 +412,33 @@ def site_new(
     request: Request,
     db: Session = Depends(get_db),
     name: str = Form(...),
-    vpn_type: str = Form(...),
+    vpn_type: str = Form("wireguard"),
     local_subnet: str = Form("192.168.1.0/24"),
     site_code: str = Form(""),
     region: str = Form(""),
+    access_mode: str = Form("gateway"),
+    device_label: str = Form(""),
+    device_admin_port: str = Form(""),
 ):
     if not _authed(request):
         return RedirectResponse("/login", status_code=303)
+    port: int | None = None
+    if device_admin_port.strip():
+        try:
+            port = int(device_admin_port.strip())
+        except ValueError as exc:
+            settings = get_or_create_settings(db)
+            return templates.TemplateResponse(
+                request,
+                "site_new.html",
+                {
+                    "settings": settings,
+                    "error": f"Invalid admin port: {exc}",
+                    "regions": _all_regions(db),
+                    "security_warning": _security_warning(),
+                },
+                status_code=400,
+            )
     try:
         site = create_site(
             db,
@@ -427,6 +447,9 @@ def site_new(
             local_subnet=local_subnet or None,
             site_code=site_code or None,
             region=region or None,
+            access_mode=access_mode or "gateway",
+            device_label=device_label or None,
+            device_admin_port=port,
         )
     except Exception as exc:
         settings = get_or_create_settings(db)
@@ -823,12 +846,18 @@ def connected_page(request: Request, db: Session = Depends(get_db)):
     from app.services.sessions import get_live_sessions
 
     sessions = get_live_sessions(db)
+    tech_sessions = [s for s in sessions if s.actor_type == "engineer"]
+    site_sessions = [s for s in sessions if s.actor_type == "site"]
     return templates.TemplateResponse(
         request,
         "connected.html",
         {
             "settings": settings,
             "sessions": sessions,
+            "tech_sessions": tech_sessions,
+            "site_sessions": site_sessions,
+            "tech_count": len(tech_sessions),
+            "site_count": len(site_sessions),
             "security_warning": _security_warning(),
         },
     )

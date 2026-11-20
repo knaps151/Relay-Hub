@@ -65,9 +65,12 @@ def require_api_auth(
 
 class SiteCreate(BaseModel):
     name: str
-    vpn_type: str  # tailscale | wireguard | openvpn
+    vpn_type: str = "wireguard"  # tailscale | wireguard | openvpn (forced wireguard when direct)
     local_subnet: str = "192.168.1.0/24"
     site_code: Optional[str] = None
+    access_mode: str = "gateway"  # gateway | direct
+    device_label: Optional[str] = None
+    device_admin_port: Optional[int] = None
 
 
 class DeviceCreate(BaseModel):
@@ -92,6 +95,7 @@ class SiteResponse(BaseModel):
     name: str
     site_code: str
     vpn_type: str
+    access_mode: str = "gateway"
     site_index: int
     virtual_subnet: str
     local_subnet: str
@@ -131,6 +135,7 @@ def api_list_sites(
             name=s.name,
             site_code=s.site_code,
             vpn_type=s.vpn_type,
+            access_mode=getattr(s, "access_mode", "gateway") or "gateway",
             site_index=s.site_index,
             virtual_subnet=s.virtual_subnet,
             local_subnet=s.local_subnet,
@@ -155,6 +160,9 @@ def api_create_site(
             vpn_type=site_data.vpn_type,
             local_subnet=site_data.local_subnet,
             site_code=site_data.site_code,
+            access_mode=site_data.access_mode,
+            device_label=site_data.device_label,
+            device_admin_port=site_data.device_admin_port,
         )
     except Exception as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -164,6 +172,7 @@ def api_create_site(
         name=site.name,
         site_code=site.site_code,
         vpn_type=site.vpn_type,
+        access_mode=getattr(site, "access_mode", "gateway") or "gateway",
         site_index=site.site_index,
         virtual_subnet=site.virtual_subnet,
         local_subnet=site.local_subnet,
@@ -187,6 +196,7 @@ def api_get_site(
         name=site.name,
         site_code=site.site_code,
         vpn_type=site.vpn_type,
+        access_mode=getattr(site, "access_mode", "gateway") or "gateway",
         site_index=site.site_index,
         virtual_subnet=site.virtual_subnet,
         local_subnet=site.local_subnet,

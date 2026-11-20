@@ -33,6 +33,7 @@ class LiveSession:
     transfer_rx: int = 0
     transfer_tx: int = 0
     site_id: Optional[int] = None
+    access_mode: str = "gateway"  # gateway | direct (sites only)
 
 
 def get_live_sessions(db: Session) -> list[LiveSession]:
@@ -76,6 +77,7 @@ def get_live_sessions(db: Session) -> list[LiveSession]:
                     transfer_rx=peer.transfer_rx,
                     transfer_tx=peer.transfer_tx,
                     site_id=site.id,
+                    access_mode=getattr(site, "access_mode", "gateway") or "gateway",
                 ))
         elif site.vpn_type == "openvpn":
             connected = openvpn.connected_clients()
@@ -88,6 +90,7 @@ def get_live_sessions(db: Session) -> list[LiveSession]:
                     endpoint=None,
                     last_handshake=connected[site.ovpn_common_name],
                     site_id=site.id,
+                    access_mode=getattr(site, "access_mode", "gateway") or "gateway",
                 ))
         elif site.vpn_type == "tailscale":
             if site.online:
@@ -99,6 +102,7 @@ def get_live_sessions(db: Session) -> list[LiveSession]:
                     endpoint=None,
                     last_handshake=site.last_seen,
                     site_id=site.id,
+                    access_mode=getattr(site, "access_mode", "gateway") or "gateway",
                 ))
 
     return sessions

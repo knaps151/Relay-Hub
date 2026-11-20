@@ -32,6 +32,8 @@ class Site(Base):
     name: Mapped[str] = mapped_column(String(200))
     site_code: Mapped[str] = mapped_column(String(64))
     vpn_type: Mapped[str] = mapped_column(String(32))  # tailscale | wireguard | openvpn
+    # gateway = router + LAN NETMAP; direct = single device on WireGuard (no router)
+    access_mode: Mapped[str] = mapped_column(String(32), default="gateway")
     region: Mapped[str] = mapped_column(String(120), default="")
     site_index: Mapped[int] = mapped_column(Integer)
     virtual_subnet: Mapped[str] = mapped_column(String(64))

@@ -1,0 +1,12 @@
+{$RELAY_DOMAIN:localhost} {
+	encode gzip
+
+	handle /headscale* {
+		uri strip_prefix /headscale
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:8000
+	}
+}

@@ -75,8 +75,11 @@ HEADSCALE_URL=https://relay.example.co.uk/headscale
 PUBLIC_UI_URL=https://relay.example.co.uk
 
 # Point DNS A record, open 80/443/51820/udp/1194/tcp, then:
-docker compose --profile caddy up -d --build
+docker compose -f docker-compose.yml -f docker-compose.vps.yml --profile caddy up -d --build
 ```
+
+VPS overlay (`docker-compose.vps.yml`) runs API + Caddy on host networking so WireGuard UDP handshakes work.
+
 
 Update `headscale/config.yaml` `server_url` to the public Headscale URL before clients join.
 

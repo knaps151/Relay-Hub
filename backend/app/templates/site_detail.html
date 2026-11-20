@@ -2,6 +2,7 @@
 {% block title %}{{ site.name }} · ParkTech Relay{% endblock %}
 {% block page_title %}{{ site.name }}{% endblock %}
 {% block page_subtitle %}
+  {% if site.access_mode == 'direct' %}<span class="badge text-bg-success">Direct device</span>{% endif %}
   {% if site.vpn_type == 'tailscale' %}<span class="badge text-bg-info">Tailscale</span>
   {% elif site.vpn_type == 'wireguard' %}<span class="badge text-bg-warning">WireGuard</span>
   {% else %}<span class="badge text-bg-secondary">OpenVPN</span>{% endif %}
@@ -25,10 +26,27 @@
 <div class="alert alert-warning">{{ site.notes }}</div>
 {% endif %}
 
+{% if site.access_mode == 'direct' and site.vpn_type == 'wireguard' %}
+<div class="card mb-3 border-success">
+  <div class="card-header fw-semibold text-success">Install on device</div>
+  <div class="card-body">
+    <p class="text-secondary mb-2">This endpoint has no site router. Install WireGuard on the device with the config below. Techs reach it at the virtual IP in the cheat sheet.</p>
+    <p class="mono mb-3">Address: {{ site.wg_tunnel_ip }} · Endpoint: {{ settings.wg_endpoint }}</p>
+    <a class="btn btn-primary" href="/sites/{{ site.id }}/wireguard.conf">Download .conf</a>
+  </div>
+</div>
+{% endif %}
+
 <div class="card mb-3" id="cheat-sheet">
   <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-    <span class="fw-semibold">Device IP cheat sheet</span>
-    <span class="text-secondary small">Local {{ site.local_subnet }} → virtual {{ site.virtual_subnet }}</span>
+    <span class="fw-semibold">{% if site.access_mode == 'direct' %}Device reachability{% else %}Device IP cheat sheet{% endif %}</span>
+    <span class="text-secondary small">
+      {% if site.access_mode == 'direct' %}
+      Virtual IP in {{ site.virtual_subnet }}
+      {% else %}
+      Local {{ site.local_subnet }} → virtual {{ site.virtual_subnet }}
+      {% endif %}
+    </span>
   </div>
   <div class="card-body p-0">
     <div class="table-responsive">
@@ -116,6 +134,7 @@
 </div>
 {% endfor %}
 
+{% if site.access_mode != 'direct' %}
 <div class="card mb-3">
   <div class="card-header fw-semibold">Add device</div>
   <div class="card-body">
@@ -151,6 +170,7 @@
     </form>
   </div>
 </div>
+{% endif %}
 
 {% if recent_events %}
 <div class="card mb-3">
@@ -206,6 +226,12 @@
               </form>
             </div>
             {% elif site.vpn_type == 'wireguard' %}
+              {% if site.access_mode == 'direct' %}
+            <p class="text-secondary">Direct device WireGuard config (same as the install card above).</p>
+            <p class="mono">Address: {{ site.wg_tunnel_ip }}</p>
+            <p class="text-secondary small">Endpoint: <span class="mono">{{ settings.wg_endpoint }}</span></p>
+            <a class="btn btn-primary btn-sm" href="/sites/{{ site.id }}/wireguard.conf">Download .conf</a>
+              {% else %}
             <p class="text-secondary">Download the peer config for the site router / <span class="mono">wg-quick</span>.</p>
             <p class="mono">Tunnel IP: {{ site.wg_tunnel_ip }}</p>
             <p class="text-secondary small">Endpoint: <span class="mono">{{ settings.wg_endpoint }}</span></p>
@@ -216,6 +242,7 @@
             <div class="alert alert-light border small mb-0">
               On Teltonika: upload and run <span class="mono">sh /tmp/{{ site.site_code }}-teltonika.txt</span>
             </div>
+              {% endif %}
             {% else %}
             <p class="text-secondary">Download the OpenVPN client profile (TCP).</p>
             <p class="mono">CN: {{ site.ovpn_common_name }} · {{ site.ovpn_client_ip }}</p>

@@ -6,8 +6,9 @@
 - `nftables` (or `iptables` fallback) for 1:1 NETMAP
 - `/dev/net/tun` available to containers
 - Capabilities: `NET_ADMIN` (Compose already requests this)
-- The `api` service uses `network_mode: host` so WireGuard UDP is not broken by `docker-proxy`
+- On a Linux VPS use `docker compose -f docker-compose.yml -f docker-compose.vps.yml --profile caddy up -d` so API/Caddy use host networking (WireGuard UDP is broken by `docker-proxy`)
 - Host IP forwarding: `sysctl -w net.ipv4.ip_forward=1` (persist in `/etc/sysctl.d/`)
+- Local Mac/Desktop: default `docker-compose.yml` (bridge) is fine with `WG_DRY_RUN=1`
 - Open ports:
   - `8000/tcp` — dashboard (or `80/443` with Caddy profile)
   - `8080/tcp` — Headscale control (or via reverse proxy / ngrok)

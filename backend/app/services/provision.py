@@ -71,13 +71,21 @@ def create_site(
     local_subnet: str | None = None,
     site_code: str | None = None,
     region: str | None = None,
+    access_mode: str = "gateway",
+    device_label: str | None = None,
+    device_admin_port: int | None = None,
 ) -> Site:
-    if vpn_type not in {"tailscale", "wireguard", "openvpn"}:
+    access_mode = (access_mode or "gateway").strip().lower()
+    if access_mode not in {"gateway", "direct"}:
+        raise ValueError("access_mode must be gateway or direct")
+
+    if access_mode == "direct":
+        vpn_type = "wireguard"
+    elif vpn_type not in {"tailscale", "wireguard", "openvpn"}:
         raise ValueError("vpn_type must be tailscale, wireguard, or openvpn")
 
     settings = get_or_create_settings(db)
     cfg = get_settings()
-    local_subnet = local_subnet or cfg.default_local_subnet
     code = site_code or slugify(name)
     # ensure unique
     existing = db.scalar(select(Site).where(Site.site_code == code))
@@ -85,10 +93,18 @@ def create_site(
         code = f"{code}-{int(datetime.utcnow().timestamp()) % 10000}"
 
     site_index, virtual_subnet = allocate_virtual_subnet(db, settings.base_cidr)
+
+    if access_mode == "direct":
+        # Identity mapping: no customer LAN; device address is virtual .1
+        local_subnet = virtual_subnet
+    else:
+        local_subnet = local_subnet or cfg.default_local_subnet
+
     site = Site(
         name=name,
         site_code=code,
         vpn_type=vpn_type,
+        access_mode=access_mode,
         region=(region or "").strip(),
         site_index=site_index,
         virtual_subnet=virtual_subnet,
@@ -112,14 +128,25 @@ def create_site(
         site.wg_private_key = priv
         site.wg_public_key = pub
         site.wg_hub_public_key = hub.wg_public_key
-        # Tunnel address in hub WG pool 10.100.0.0/24
-        site.wg_tunnel_ip = f"10.100.0.{10 + site_index}/32"
-        try:
-            wireguard.set_peer(pub, f"{virtual_subnet}, {site.wg_tunnel_ip.split('/')[0]}/32")
-            netmap.apply_site_netmap(virtual_subnet, local_subnet)
-            netmap.sync_routes_for_wireguard(virtual_subnet, cfg.wg_interface)
-        except Exception as exc:
-            logger.warning("WG peer apply: %s", exc)
+        if access_mode == "direct":
+            # Device lives at the virtual IP itself (no separate 10.100.0.x tunnel addr)
+            device_ip = default_gateway_virtual_ip(virtual_subnet)
+            site.wg_tunnel_ip = f"{device_ip}/32"
+            allowed = f"{device_ip}/32"
+            try:
+                wireguard.set_peer(pub, allowed)
+                netmap.sync_routes_for_wireguard(f"{device_ip}/32", cfg.wg_interface)
+            except Exception as exc:
+                logger.warning("WG peer apply (direct): %s", exc)
+        else:
+            # Tunnel address in hub WG pool 10.100.0.0/24
+            site.wg_tunnel_ip = f"10.100.0.{10 + site_index}/32"
+            try:
+                wireguard.set_peer(pub, f"{virtual_subnet}, {site.wg_tunnel_ip.split('/')[0]}/32")
+                netmap.apply_site_netmap(virtual_subnet, local_subnet)
+                netmap.sync_routes_for_wireguard(virtual_subnet, cfg.wg_interface)
+            except Exception as exc:
+                logger.warning("WG peer apply: %s", exc)
 
     elif vpn_type == "openvpn":
         cn = f"site-{code}"[:60]
@@ -138,15 +165,26 @@ def create_site(
     db.commit()
     db.refresh(site)
 
-    # Seed a default router device for the cheat sheet
-    add_device(
-        db,
-        site,
-        label="Cabinet Router",
-        device_type="router",
-        local_ip=str(ipaddress.ip_network(local_subnet).network_address + 1),
-        admin_port=80,
-    )
+    if access_mode == "direct":
+        device_ip = default_gateway_virtual_ip(virtual_subnet)
+        add_device(
+            db,
+            site,
+            label=(device_label or name).strip() or "Direct device",
+            device_type="direct",
+            local_ip=device_ip,
+            admin_port=device_admin_port if device_admin_port is not None else 80,
+        )
+    else:
+        # Seed a default router device for the cheat sheet
+        add_device(
+            db,
+            site,
+            label="Cabinet Router",
+            device_type="router",
+            local_ip=str(ipaddress.ip_network(local_subnet).network_address + 1),
+            admin_port=80,
+        )
     return site
 
 
@@ -178,9 +216,12 @@ def wireguard_client_conf(db: Session, site: Site) -> str:
     settings = get_or_create_settings(db)
     if not site.wg_private_key or not site.wg_hub_public_key or not site.wg_tunnel_ip:
         raise ValueError("Site is not a WireGuard site with keys")
-    # Hub + other virtual nets: for POC allow hub WG net + nothing else required for site->hub
-    # Engineers reach devices via hub routing; site AllowedIPs toward hub typically include hub subnet.
-    allowed = "10.100.0.0/24"
+    if getattr(site, "access_mode", "gateway") == "direct":
+        # Device address is the ParkTech virtual IP; reach hub + engineer pool
+        allowed = "10.100.0.0/22"
+    else:
+        # Gateway router: hub WG net only (LAN stays local; NETMAP on hub)
+        allowed = "10.100.0.0/24"
     return wireguard.render_client_conf(
         client_private_key=site.wg_private_key,
         client_address=site.wg_tunnel_ip,
@@ -197,6 +238,8 @@ def teltonika_uci_script(db: Session, site: Site) -> str:
     settings = get_or_create_settings(db)
     if site.vpn_type != "wireguard":
         raise ValueError("Teltonika config only available for WireGuard sites")
+    if getattr(site, "access_mode", "gateway") == "direct":
+        raise ValueError("Teltonika config is for gateway sites only (direct devices use WireGuard .conf)")
     if not site.wg_private_key or not site.wg_hub_public_key or not site.wg_tunnel_ip:
         raise ValueError("Site is not a WireGuard site with keys")
 
@@ -238,11 +281,17 @@ def reconcile_wireguard_peers(db: Session) -> None:
     for site in sites:
         if not site.wg_public_key or not site.wg_tunnel_ip:
             continue
-        allowed = f"{site.virtual_subnet}, {site.wg_tunnel_ip.split('/')[0]}/32"
         try:
-            wireguard.set_peer(site.wg_public_key, allowed)
-            netmap.apply_site_netmap(site.virtual_subnet, site.local_subnet)
-            netmap.sync_routes_for_wireguard(site.virtual_subnet, cfg.wg_interface)
+            if getattr(site, "access_mode", "gateway") == "direct":
+                device_ip = site.wg_tunnel_ip.split("/")[0]
+                allowed = f"{device_ip}/32"
+                wireguard.set_peer(site.wg_public_key, allowed)
+                netmap.sync_routes_for_wireguard(allowed, cfg.wg_interface)
+            else:
+                allowed = f"{site.virtual_subnet}, {site.wg_tunnel_ip.split('/')[0]}/32"
+                wireguard.set_peer(site.wg_public_key, allowed)
+                netmap.apply_site_netmap(site.virtual_subnet, site.local_subnet)
+                netmap.sync_routes_for_wireguard(site.virtual_subnet, cfg.wg_interface)
         except Exception as exc:
             logger.debug("reconcile peer %s: %s", site.site_code, exc)
 

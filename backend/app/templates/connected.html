@@ -1,39 +1,75 @@
 {% extends "base.html" %}
 {% block title %}Connected · ParkTech Relay{% endblock %}
 {% block page_title %}Who's connected{% endblock %}
-{% block page_subtitle %}Live tunnel sessions{% endblock %}
+{% block page_subtitle %}{{ tech_count }} tech{{ 's' if tech_count != 1 else '' }} · {{ site_count }} site{{ 's' if site_count != 1 else '' }} / device{{ 's' if site_count != 1 else '' }} online{% endblock %}
 
 {% block body %}
-<div class="card">
-  <div class="card-header fw-semibold">Live sessions</div>
+<div class="card mb-3">
+  <div class="card-header fw-semibold">Technicians</div>
   <div class="card-body p-0">
-    {% if not sessions %}
-    <div class="text-center text-secondary py-5">No active sessions right now.</div>
+    {% if not tech_sessions %}
+    <div class="text-center text-secondary py-4">No technicians connected.</div>
     {% else %}
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0">
         <thead class="table-light">
           <tr>
             <th>Name</th>
-            <th>Actor</th>
             <th>VPN</th>
             <th>Endpoint</th>
             <th>Last handshake</th>
           </tr>
         </thead>
         <tbody>
-          {% for s in sessions %}
+          {% for s in tech_sessions %}
+          <tr>
+            <td class="fw-semibold"><a href="/engineers/{{ s.actor_id }}">{{ s.actor_name }}</a></td>
+            <td>{{ s.vpn_type }}</td>
+            <td class="mono small">{{ s.endpoint or '—' }}</td>
+            <td class="text-secondary small">{{ s.last_handshake|timeago if s.last_handshake else '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header fw-semibold">Sites / devices</div>
+  <div class="card-body p-0">
+    {% if not site_sessions %}
+    <div class="text-center text-secondary py-4">No sites or direct devices connected.</div>
+    {% else %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>VPN</th>
+            <th>Endpoint</th>
+            <th>Last handshake</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in site_sessions %}
           <tr>
             <td class="fw-semibold">
               {% if s.site_id %}
               <a href="/sites/{{ s.site_id }}">{{ s.actor_name }}</a>
-              {% elif s.actor_type == 'engineer' %}
-              <a href="/engineers/{{ s.actor_id }}">{{ s.actor_name }}</a>
               {% else %}
               {{ s.actor_name }}
               {% endif %}
             </td>
-            <td><span class="badge text-bg-light border">{{ s.actor_type }}</span></td>
+            <td>
+              {% if s.access_mode == 'direct' %}
+              <span class="badge text-bg-success">Direct</span>
+              {% else %}
+              <span class="badge text-bg-light border">Gateway</span>
+              {% endif %}
+            </td>
             <td>{{ s.vpn_type }}</td>
             <td class="mono small">{{ s.endpoint or '—' }}</td>
             <td class="text-secondary small">{{ s.last_handshake|timeago if s.last_handshake else '—' }}</td>

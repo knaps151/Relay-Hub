@@ -1,0 +1,20 @@
+# VPS overlay: host networking so WireGuard UDP bypasses docker-proxy.
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.vps.yml --profile caddy up -d --build
+services:
+  api:
+    network_mode: host
+    environment:
+      HEADSCALE_API_URL: http://127.0.0.1:8080
+    ports: !reset []
+    sysctls: !reset []
+    networks: !reset
+
+  caddy:
+    network_mode: host
+    ports: !reset []
+    networks: !reset
+    volumes: !override
+      - ./caddy/Caddyfile.vps:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
