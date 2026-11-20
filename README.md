@@ -2,7 +2,9 @@
 
 Self-hosted multi-VPN hub for parking / CPO fleets.
 
-**Live POC:** [https://relay.parktech.solutions](https://relay.parktech.solutions)
+**Project page:** [GitHub Pages](https://knaps151.github.io/ParkTech-Relay/) · **Source:** this repository
+
+> Do not commit `.env`, SQLite under `data/`, PKI/`vpn/`, or real WireGuard private keys. Only `.env.example` (placeholder defaults) belongs in git.
 
 **One access model for every site:** virtual subnets `10.101.X.0/24` and a device cheat sheet.  
 **Transports:** Tailscale (Headscale), WireGuard, OpenVPN — pick per site (or change later).  

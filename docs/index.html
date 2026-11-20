@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ParkTech Relay — one hub for every site VPN</title>
+  <meta name="description" content="Self-hosted multi-VPN hub for parking and CPO fleets. One virtual IP cheat sheet across WireGuard, Tailscale, and OpenVPN.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="top">
+    <a class="brand" href="./">ParkTech Relay</a>
+    <nav>
+      <a href="#how">How it works</a>
+      <a href="#value">Make it good</a>
+      <a href="#start">Get started</a>
+      <a class="btn btn-ghost" href="https://github.com/knaps151/ParkTech-Relay">GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="eyebrow">Fleet remote access · self-hosted</p>
+      <h1>ParkTech<br>Relay</h1>
+      <p class="lede">
+        One hub. Three VPN transports. The same virtual subnet and device cheat sheet
+        for every car park — so engineers reach cameras, chargers, and cabinets without
+        memorising each site’s private LAN.
+      </p>
+      <div class="cta">
+        <a class="btn btn-primary" href="https://github.com/knaps151/ParkTech-Relay">View on GitHub</a>
+        <a class="btn btn-ghost" href="https://github.com/knaps151/ParkTech-Relay#quick-start-local">Quick start</a>
+      </div>
+    </section>
+
+    <section class="strip" aria-label="Highlights">
+      <div><strong>10.101.X.0/24</strong><span>Per-site virtual subnet</span></div>
+      <div><strong>WG · TS · OVPN</strong><span>Pick per site</span></div>
+      <div><strong>Gateway or direct</strong><span>Router LAN or single device</span></div>
+      <div><strong>Engineer peers</strong><span>Phone / laptop on 4G</span></div>
+    </section>
+
+    <section id="how" class="block">
+      <h2>How it works</h2>
+      <p class="support">Operators provision sites on the hub. Edge gear joins with WireGuard, Tailscale (Headscale), or OpenVPN. Techs dial into the hub and open virtual IPs from the cheat sheet.</p>
+      <ol class="steps">
+        <li>
+          <span class="n">01</span>
+          <h3>Allocate</h3>
+          <p>Each site gets the next <code>10.101.X.0/24</code>. Local <code>.Y</code> maps 1:1 to virtual <code>.Y</code>.</p>
+        </li>
+        <li>
+          <span class="n">02</span>
+          <h3>Connect the edge</h3>
+          <p>Gateway router for a full LAN, or a direct WireGuard install on a Pi / cloud VM — including a 3‑minute <code>curl | sudo bash</code> link.</p>
+        </li>
+        <li>
+          <span class="n">03</span>
+          <h3>Reach from anywhere</h3>
+          <p>Engineer WireGuard to the hub, then browse the cheat sheet. Optional hub LAN scan discovers hosts when the tunnel is live.</p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="block two-col">
+      <div>
+        <h2>Built for fleets</h2>
+        <ul class="ticks">
+          <li>Fleet dashboard with Online / Offline / Disabled</li>
+          <li>Edit protocol, rotate credentials, disable without deleting</li>
+          <li>Catalogues for regions, equipment, and tech device types</li>
+          <li>Access log + config download audit trail</li>
+          <li>Compose stack: API, Headscale, OpenVPN, optional Caddy</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>What we learned in the POC</h3>
+        <p>Direct Linux / Pi WireGuard is the fastest path to a working demo. Consumer UniFi “VPN Client” is a poor gateway for inbound LAN access — prefer Teltonika or a small Linux edge with NETMAP.</p>
+      </div>
+    </section>
+
+    <section id="value" class="block">
+      <h2>Making it good</h2>
+      <p class="support">The POC proves the model. These moves turn it into an operator product.</p>
+      <div class="cards">
+        <article>
+          <h3>Trusted gateway path</h3>
+          <p>First-class Teltonika / Linux bring-up, health checks, and a clear “supported edge” list. Kill confusion around UniFi.</p>
+        </article>
+        <article>
+          <h3>Safer installs</h3>
+          <p>One-time temp links, shorter TTL options, scoped tokens for CI/cloud bootstrap, revoke-all on rotate.</p>
+        </article>
+        <article>
+          <h3>Smarter discovery</h3>
+          <p>Scheduled LAN scans, better type detection, optional mDNS/SNMP later — still additive, never destructive.</p>
+        </article>
+        <article>
+          <h3>Operator UX</h3>
+          <p>Handshake age, last reachability, per-device ping history, fleet filters, and “copy reach URL” everywhere.</p>
+        </article>
+        <article>
+          <h3>Hardening &amp; ops</h3>
+          <p>Forced strong admin password, backup/restore of SQLite + PKI, alert when a site goes dark.</p>
+        </article>
+        <article>
+          <h3>Pilot discipline</h3>
+          <p>1–2 real sites, named engineers on 4G, runbook for join/rotate/disable — then scale catalogues and regions.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="start" class="block cta-block">
+      <h2>Get started</h2>
+      <p class="support">Clone the repo, bring Compose up locally (dry-run friendly on a Mac), then deploy the VPS overlay when you want real tunnels.</p>
+      <pre class="code"><code>git clone https://github.com/knaps151/ParkTech-Relay.git
+cd ParkTech-Relay
+cp .env.example .env
+docker compose up -d --build
+# open http://127.0.0.1:8000  ·  default password in .env.example</code></pre>
+      <a class="btn btn-primary" href="https://github.com/knaps151/ParkTech-Relay">Open repository</a>
+    </section>
+  </main>
+
+  <footer>
+    <span>ParkTech Relay</span>
+    <span>POC · self-hosted · no cloud lock-in</span>
+  </footer>
+</body>
+</html>
