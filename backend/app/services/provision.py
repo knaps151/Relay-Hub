@@ -12,6 +12,7 @@ from app.config import get_settings
 from app.models import HubState, SettingsRow, Site, SiteDevice
 from app.services import headscale as hs
 from app.services import netmap, openvpn, wireguard
+from app.services.netmap import gateway_peer_allowed_ips
 from app.services.subnets import allocate_virtual_subnet, default_gateway_virtual_ip, virtual_ip_for_local
 
 logger = logging.getLogger(__name__)
@@ -142,9 +143,11 @@ def create_site(
             # Tunnel address in hub WG pool 10.100.0.0/24
             site.wg_tunnel_ip = f"10.100.0.{10 + site_index}/32"
             try:
-                wireguard.set_peer(pub, f"{virtual_subnet}, {site.wg_tunnel_ip.split('/')[0]}/32")
+                allowed = gateway_peer_allowed_ips(local_subnet, site.wg_tunnel_ip)
+                wireguard.set_peer(pub, allowed)
                 netmap.apply_site_netmap(virtual_subnet, local_subnet)
-                netmap.sync_routes_for_wireguard(virtual_subnet, cfg.wg_interface)
+                # Route real LAN via WG (hub DNATs 10.101.X → LAN before encrypt)
+                netmap.sync_routes_for_wireguard(local_subnet, cfg.wg_interface)
             except Exception as exc:
                 logger.warning("WG peer apply: %s", exc)
 
@@ -222,9 +225,9 @@ def wireguard_client_conf(db: Session, site: Site) -> str:
         allowed = "10.100.0.0/22"
         include_dns = False
     else:
-        # Gateway router (UniFi / Teltonika / wg-quick): hub WG net only
+        # Gateway router: reach hub + engineer pool (replies to techs on 10.100.2.x)
         # UniFi VPN Client requires a valid DNS = x.x.x.x line on import
-        allowed = "10.100.0.0/24"
+        allowed = "10.100.0.0/22"
         include_dns = True
     return wireguard.render_client_conf(
         client_private_key=site.wg_private_key,
@@ -330,9 +333,10 @@ def _provision_vpn_for_site(db: Session, site: Site) -> None:
         else:
             site.wg_tunnel_ip = f"10.100.0.{10 + site.site_index}/32"
             try:
-                wireguard.set_peer(pub, f"{site.virtual_subnet}, {site.wg_tunnel_ip.split('/')[0]}/32")
+                allowed = gateway_peer_allowed_ips(site.local_subnet, site.wg_tunnel_ip)
+                wireguard.set_peer(pub, allowed)
                 netmap.apply_site_netmap(site.virtual_subnet, site.local_subnet)
-                netmap.sync_routes_for_wireguard(site.virtual_subnet, cfg.wg_interface)
+                netmap.sync_routes_for_wireguard(site.local_subnet, cfg.wg_interface)
             except Exception as exc:
                 logger.warning("WG peer apply: %s", exc)
 
@@ -378,10 +382,12 @@ def update_site(
         if new_local != site.local_subnet and getattr(site, "access_mode", "gateway") == "gateway":
             site.local_subnet = new_local
             # Refresh NETMAP if WireGuard gateway
-            if site.vpn_type == "wireguard" and site.enabled:
+            if site.vpn_type == "wireguard" and site.enabled and site.wg_public_key and site.wg_tunnel_ip:
                 try:
+                    allowed = gateway_peer_allowed_ips(site.local_subnet, site.wg_tunnel_ip)
+                    wireguard.set_peer(site.wg_public_key, allowed)
                     netmap.apply_site_netmap(site.virtual_subnet, site.local_subnet)
-                    netmap.sync_routes_for_wireguard(site.virtual_subnet, get_settings().wg_interface)
+                    netmap.sync_routes_for_wireguard(site.local_subnet, get_settings().wg_interface)
                 except Exception as exc:
                     logger.warning("NETMAP refresh after local_subnet change: %s", exc)
             # Remap device virtual IPs to match new local host offsets
@@ -410,11 +416,10 @@ def set_site_enabled(db: Session, site: Site, enabled: bool) -> Site:
                 device_ip = site.wg_tunnel_ip.split("/")[0]
                 wireguard.set_peer(site.wg_public_key, f"{device_ip}/32")
             else:
-                wireguard.set_peer(
-                    site.wg_public_key,
-                    f"{site.virtual_subnet}, {site.wg_tunnel_ip.split('/')[0]}/32",
-                )
+                allowed = gateway_peer_allowed_ips(site.local_subnet, site.wg_tunnel_ip)
+                wireguard.set_peer(site.wg_public_key, allowed)
                 netmap.apply_site_netmap(site.virtual_subnet, site.local_subnet)
+                netmap.sync_routes_for_wireguard(site.local_subnet, get_settings().wg_interface)
         except Exception as exc:
             logger.warning("re-enable WG peer: %s", exc)
     db.commit()
@@ -481,10 +486,10 @@ def reconcile_wireguard_peers(db: Session) -> None:
                 wireguard.set_peer(site.wg_public_key, allowed)
                 netmap.sync_routes_for_wireguard(allowed, cfg.wg_interface)
             else:
-                allowed = f"{site.virtual_subnet}, {site.wg_tunnel_ip.split('/')[0]}/32"
+                allowed = gateway_peer_allowed_ips(site.local_subnet, site.wg_tunnel_ip)
                 wireguard.set_peer(site.wg_public_key, allowed)
                 netmap.apply_site_netmap(site.virtual_subnet, site.local_subnet)
-                netmap.sync_routes_for_wireguard(site.virtual_subnet, cfg.wg_interface)
+                netmap.sync_routes_for_wireguard(site.local_subnet, cfg.wg_interface)
         except Exception as exc:
             logger.debug("reconcile peer %s: %s", site.site_code, exc)
 

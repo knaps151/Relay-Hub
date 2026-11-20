@@ -80,7 +80,7 @@ def test_gateway_wireguard_conf_includes_dns_for_unifi(db_session):
     )
     conf = wireguard_client_conf(db_session, site)
     assert "DNS = 1.1.1.1" in conf
-    assert "AllowedIPs = 10.100.0.0/24" in conf
+    assert "AllowedIPs = 10.100.0.0/22" in conf
 
 
 def test_gateway_site_unchanged_defaults(db_session):
