@@ -79,6 +79,8 @@ def scan_and_add_devices(db: Session, site: Site) -> ScanResult:
         raise ValueError("LAN scan requires a WireGuard, OpenVPN, or Tailscale site")
     if getattr(site, "access_mode", "gateway") != "gateway":
         raise ValueError("LAN scan is only available for gateway sites (not direct devices)")
+    if not getattr(site, "enabled", True):
+        raise ValueError("Site is disabled — enable it before scanning")
     if not _site_tunnel_online(site):
         raise ValueError("Site tunnel is offline — connect the site router before scanning")
 

@@ -22,8 +22,8 @@
       </thead>
       <tbody>
         {% for site in sites %}
-        <tr class="{% if not site.online %}table-warning{% endif %}" style="cursor:pointer"
-            onclick="window.location='/sites/{{ site.id }}#cheat-sheet'">
+        <tr class="{% if not site.enabled %}table-secondary{% elif not site.online %}table-warning{% endif %}" style="cursor:pointer"
+            onclick="window.location='/sites/{{ site.id }}'">
           <td>
             <div class="fw-semibold">{{ site.name }}</div>
             <div class="text-secondary small mono">{{ site.site_code }}</div>
@@ -43,7 +43,9 @@
           </td>
           <td class="mono">{{ site.virtual_subnet }}</td>
           <td>
-            {% if site.online %}
+            {% if not site.enabled %}
+            <span class="badge text-bg-secondary">Disabled</span>
+            {% elif site.online %}
             <span class="badge text-bg-success">Online</span>
             {% else %}
             <span class="badge text-bg-danger">Offline</span>
@@ -52,8 +54,24 @@
             <div class="text-secondary small">{{ site.last_seen|timeago }}</div>
             {% endif %}
           </td>
-          <td class="text-end">
-            <a class="btn btn-sm btn-outline-primary" href="/sites/{{ site.id }}#cheat-sheet" onclick="event.stopPropagation()">Open</a>
+          <td class="text-end" onclick="event.stopPropagation()">
+            <div class="d-inline-flex flex-wrap gap-1 justify-content-end">
+              <a class="btn btn-sm btn-outline-primary" href="/sites/{{ site.id }}">Open</a>
+              {% if site.enabled %}
+              <form method="post" action="/sites/{{ site.id }}/disable" class="m-0"
+                    onsubmit="return confirm('Disable {{ site.name }}?')">
+                <button class="btn btn-sm btn-outline-warning" type="submit">Disable</button>
+              </form>
+              {% else %}
+              <form method="post" action="/sites/{{ site.id }}/enable" class="m-0">
+                <button class="btn btn-sm btn-outline-success" type="submit">Enable</button>
+              </form>
+              {% endif %}
+              <form method="post" action="/sites/{{ site.id }}/delete" class="m-0"
+                    onsubmit="return confirm('Permanently delete {{ site.name }}?')">
+                <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+              </form>
+            </div>
           </td>
         </tr>
         {% endfor %}

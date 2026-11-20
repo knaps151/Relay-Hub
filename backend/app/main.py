@@ -25,13 +25,17 @@ from app.services import openvpn
 from app.services.headscale import HeadscaleClient
 from app.services.provision import (
     add_device,
+    change_site_vpn,
     create_site,
+    delete_site,
     get_or_create_settings,
     openvpn_client_conf,
     poll_site_status,
     reconcile_wireguard_peers,
+    set_site_enabled,
     tailscale_join_cmd,
     teltonika_uci_script,
+    update_site,
     wireguard_client_conf,
 )
 from app.services.subnets import virtual_ip_for_local
@@ -535,8 +539,97 @@ def site_detail(
             "scan_skipped": scan_skipped,
             "scan_responsive": scan_responsive,
             "scan_error": scan_error or None,
+            "regions": _all_regions(db),
+            "edit_notice": request.query_params.get("notice") or None,
+            "edit_error": request.query_params.get("error") or None,
         },
     )
+
+
+@app.post("/sites/{site_id}/edit")
+def site_edit(
+    request: Request,
+    site_id: int,
+    db: Session = Depends(get_db),
+    name: str = Form(...),
+    region: str = Form(""),
+    local_subnet: str = Form(""),
+    notes: str = Form(""),
+    vpn_type: str = Form(""),
+):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    site = db.get(Site, site_id)
+    if not site:
+        raise HTTPException(404)
+    try:
+        update_site(
+            db,
+            site,
+            name=name,
+            region=region,
+            local_subnet=local_subnet or None,
+            notes=notes,
+        )
+        if vpn_type.strip() and vpn_type.strip() != site.vpn_type:
+            if getattr(site, "access_mode", "gateway") == "direct" and vpn_type.strip() != "wireguard":
+                raise ValueError("Direct devices must stay on WireGuard")
+            change_site_vpn(db, site, vpn_type.strip())
+            return RedirectResponse(
+                f"/sites/{site_id}?notice={quote('Site updated — download new VPN credentials')}#credentials",
+                status_code=303,
+            )
+    except Exception as exc:
+        return RedirectResponse(
+            f"/sites/{site_id}?error={quote(str(exc))}#site-settings",
+            status_code=303,
+        )
+    return RedirectResponse(
+        f"/sites/{site_id}?notice={quote('Site updated')}#site-settings",
+        status_code=303,
+    )
+
+
+@app.post("/sites/{site_id}/rotate-credentials")
+def site_rotate_credentials(request: Request, site_id: int, db: Session = Depends(get_db)):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    site = db.get(Site, site_id)
+    if not site:
+        raise HTTPException(404)
+    try:
+        change_site_vpn(db, site, site.vpn_type)  # same type = rotate
+    except Exception as exc:
+        return RedirectResponse(
+            f"/sites/{site_id}?error={quote(str(exc))}#credentials",
+            status_code=303,
+        )
+    return RedirectResponse(
+        f"/sites/{site_id}?notice={quote('Credentials rotated — re-download and reinstall on the site')}#credentials",
+        status_code=303,
+    )
+
+
+@app.post("/sites/{site_id}/enable")
+def site_enable(request: Request, site_id: int, db: Session = Depends(get_db)):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    site = db.get(Site, site_id)
+    if not site:
+        raise HTTPException(404)
+    set_site_enabled(db, site, True)
+    return RedirectResponse(f"/sites/{site_id}?notice={quote('Site enabled')}", status_code=303)
+
+
+@app.post("/sites/{site_id}/disable")
+def site_disable(request: Request, site_id: int, db: Session = Depends(get_db)):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    site = db.get(Site, site_id)
+    if not site:
+        raise HTTPException(404)
+    set_site_enabled(db, site, False)
+    return RedirectResponse(f"/sites/{site_id}?notice={quote('Site disabled')}", status_code=303)
 
 
 @app.post("/sites/{site_id}/devices")
@@ -659,8 +752,7 @@ def site_delete(request: Request, site_id: int, db: Session = Depends(get_db)):
         return RedirectResponse("/login", status_code=303)
     site = db.get(Site, site_id)
     if site:
-        db.delete(site)
-        db.commit()
+        delete_site(db, site)
     return RedirectResponse("/", status_code=303)
 
 

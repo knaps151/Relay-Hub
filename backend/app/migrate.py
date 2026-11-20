@@ -19,3 +19,6 @@ def ensure_schema() -> None:
         if "region" not in cols:
             logger.info("Adding sites.region column")
             conn.execute(text("ALTER TABLE sites ADD COLUMN region VARCHAR(120) DEFAULT ''"))
+        if "enabled" not in cols:
+            logger.info("Adding sites.enabled column")
+            conn.execute(text("ALTER TABLE sites ADD COLUMN enabled BOOLEAN DEFAULT 1"))

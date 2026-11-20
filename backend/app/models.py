@@ -55,6 +55,7 @@ class Site(Base):
     ovpn_common_name: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     ovpn_client_ip: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     online: Mapped[bool] = mapped_column(Boolean, default=False)
     last_seen: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_handshake: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
