@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}New engineer · ParkTech Relay{% endblock %}
+{% block page_title %}Add engineer{% endblock %}
+{% block page_subtitle %}Issue WireGuard access for a field technician{% endblock %}
+
+{% block body %}
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+<div class="card" style="max-width: 560px">
+  <div class="card-body">
+    <form method="post" action="/engineers/new">
+      <div class="mb-3">
+        <label class="form-label">Name</label>
+        <input class="form-control" name="name" placeholder="Alex Field" required autofocus>
+      </div>
+      <button class="btn btn-primary" type="submit">Create engineer</button>
+      <a class="btn btn-outline-secondary" href="/engineers">Cancel</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

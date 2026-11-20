@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}{{ engineer.name }} · ParkTech Relay{% endblock %}
+{% block page_title %}{{ engineer.name }}{% endblock %}
+{% block page_subtitle %}
+  {% if engineer.enabled %}<span class="badge text-bg-success">Enabled</span>
+  {% else %}<span class="badge text-bg-secondary">Disabled</span>{% endif %}
+  · <span class="mono">{{ engineer.assigned_ip }}</span>
+{% endblock %}
+{% block topbar_actions %}
+<a class="btn btn-outline-secondary btn-sm" href="/engineers">Engineers</a>
+{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+{% endblock %}
+
+{% block body %}
+<div class="row g-3 mb-3">
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Details</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-4">Name</dt><dd class="col-8">{{ engineer.name }}</dd>
+          <dt class="col-4">IP</dt><dd class="col-8 mono">{{ engineer.assigned_ip }}</dd>
+          <dt class="col-4">Created</dt><dd class="col-8">{{ engineer.created_at.strftime('%Y-%m-%d %H:%M') }}</dd>
+          <dt class="col-4">Status</dt>
+          <dd class="col-8">
+            {% if engineer.enabled %}Enabled — peer active on hub{% else %}Disabled — peer removed{% endif %}
+          </dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Actions</div>
+      <div class="card-body d-flex flex-wrap gap-2">
+        {% if engineer.enabled %}
+        <form method="post" action="/engineers/{{ engineer.id }}/disable" class="m-0">
+          <button class="btn btn-outline-secondary" type="submit">Disable access</button>
+        </form>
+        {% else %}
+        <form method="post" action="/engineers/{{ engineer.id }}/enable" class="m-0">
+          <button class="btn btn-primary" type="submit">Enable access</button>
+        </form>
+        {% endif %}
+        <form method="post" action="/engineers/{{ engineer.id }}/delete" class="m-0" onsubmit="return confirm('Delete this engineer?')">
+          <button class="btn btn-outline-danger" type="submit">Delete</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header fw-semibold">WireGuard configuration</div>
+  <div class="card-body">
+    <p class="text-secondary">Download and import into the WireGuard app, or scan the QR on mobile.</p>
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <a class="btn btn-primary" href="/engineers/{{ engineer.id }}/wireguard.conf">Download .conf</a>
+      <button type="button" class="btn btn-outline-secondary" onclick="copyEngineerConf()">Copy config</button>
+    </div>
+    <div class="row g-3">
+      <div class="col-lg-7">
+        <pre class="bg-light border rounded p-3 mono small mb-0" id="engineer-conf-preview">[Interface]
+PrivateKey = {{ engineer.wg_private_key[:20] }}...
+Address = {{ engineer.assigned_ip.split('/')[0] }}/32
+DNS = 1.1.1.1
+
+[Peer]
+PublicKey = (hub public key)
+Endpoint = {{ settings.wg_endpoint }}
+AllowedIPs = 10.101.0.0/16, 10.100.0.0/22
+PersistentKeepalive = 25</pre>
+      </div>
+      <div class="col-lg-5">
+        <div class="qr-box" id="qr-output"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header fw-semibold">Access scope</div>
+  <div class="card-body">
+    <ul class="mb-2">
+      <li><span class="mono">10.101.0.0/16</span> — all site virtual subnets</li>
+      <li><span class="mono">10.100.0.0/22</span> — hub transit networks</li>
+    </ul>
+    <p class="text-secondary small mb-0">Engineers always use virtual device IPs from the cheat sheet — not tunnel interface addresses.</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function copyEngineerConf() {
+  try {
+    const response = await fetch('/engineers/{{ engineer.id }}/wireguard.conf');
+    const conf = await response.text();
+    await copyText(conf, 'WireGuard config');
+  } catch (e) {
+    showToast('Copy failed', false);
+  }
+}
+
+(async function () {
+  try {
+    const response = await fetch('/engineers/{{ engineer.id }}/wireguard.conf');
+    const conf = await response.text();
+    const el = document.getElementById('qr-output');
+    if (!el || typeof QRCode === 'undefined') return;
+    QRCode.toCanvas(document.createElement('canvas'), conf, { width: 160, margin: 1 }, function (err, canvas) {
+      if (err) { el.textContent = 'QR unavailable'; return; }
+      el.innerHTML = '';
+      el.appendChild(canvas);
+    });
+  } catch (e) {}
+})();
+</script>
+{% endblock %}

@@ -18,6 +18,11 @@
     {% include "partials/sidebar.html" %}
     <div class="main-area">
       {% include "partials/topbar.html" %}
+      {% if security_warning %}
+      <div class="alert alert-warning rounded-0 mb-0 py-2 px-3" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ security_warning }}
+      </div>
+      {% endif %}
       <main class="content">
         {% block body %}{% endblock %}
       </main>

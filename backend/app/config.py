@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:////data/relay.db"
     admin_password: str = "parktech"
     http_only: bool = True
+    api_token: str = ""  # Optional bearer token for API access
 
     public_ui_url: str = "http://127.0.0.1:8000"
     headscale_url: str = "http://127.0.0.1:8080"
@@ -35,6 +36,7 @@ class Settings(BaseSettings):
     default_local_subnet: str = "192.168.1.0/24"
     poll_interval_seconds: int = 15
     sync_interval_seconds: int = 2
+    access_log_retention_days: int = 90
 
 
 @lru_cache

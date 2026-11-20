@@ -86,3 +86,38 @@ class HubState(Base):
     wg_private_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     wg_public_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Engineer(Base):
+    """
+    Field engineer with WireGuard access to all sites.
+    Engineers get IPs from 10.100.2.0/24 (starting at .10).
+    """
+    __tablename__ = "engineers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(200))
+    wg_private_key: Mapped[str] = mapped_column(Text)
+    wg_public_key: Mapped[str] = mapped_column(String(128))
+    assigned_ip: Mapped[str] = mapped_column(String(64))  # e.g., 10.100.2.10/32
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AccessEvent(Base):
+    """
+    Access log entry for tracking who accessed what.
+    Kinds: wg_handshake, ovpn_connect, ts_connect, config_download, login, wg_disconnect, ovpn_disconnect, ts_disconnect
+    """
+    __tablename__ = "access_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    actor_type: Mapped[str] = mapped_column(String(32))  # admin | engineer
+    actor_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Engineer.id or null for admin
+    actor_name: Mapped[str] = mapped_column(String(200))  # Display name
+    site_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    device_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    kind: Mapped[str] = mapped_column(String(32), index=True)
+    source_ip: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    detail: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

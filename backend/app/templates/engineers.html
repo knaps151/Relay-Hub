@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Engineers · ParkTech Relay{% endblock %}
+{% block page_title %}Engineers{% endblock %}
+{% block page_subtitle %}WireGuard access for field engineers · 10.100.2.0/24{% endblock %}
+{% block topbar_actions %}
+<a class="btn btn-primary btn-sm" href="/engineers/new"><i class="bi bi-plus-lg"></i> Add engineer</a>
+{% endblock %}
+
+{% block body %}
+<div class="card mb-3">
+  <div class="card-body">
+    <p class="text-secondary mb-0">Engineers can reach all site virtual IPs over WireGuard. Each gets a unique IP and a downloadable <span class="mono">.conf</span>.</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header fw-semibold">Engineer list</div>
+  <div class="card-body p-0">
+    {% if not engineers %}
+    <div class="text-center py-5">
+      <p class="text-secondary mb-3">No engineers yet.</p>
+      <a class="btn btn-primary" href="/engineers/new">Create the first engineer</a>
+    </div>
+    {% else %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Name</th>
+            <th>Assigned IP</th>
+            <th>Status</th>
+            <th>Created</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for eng in engineers %}
+          <tr>
+            <td><a href="/engineers/{{ eng.id }}" class="fw-semibold">{{ eng.name }}</a></td>
+            <td class="mono">{{ eng.assigned_ip }}</td>
+            <td>
+              {% if eng.enabled %}<span class="badge text-bg-success">Enabled</span>
+              {% else %}<span class="badge text-bg-secondary">Disabled</span>{% endif %}
+            </td>
+            <td class="text-secondary small">{{ eng.created_at }}</td>
+            <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="/engineers/{{ eng.id }}">Open</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

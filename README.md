@@ -84,8 +84,53 @@ Update `headscale/config.yaml` `server_url` to the public Headscale URL before c
 
 See [`scripts/host-requirements.md`](scripts/host-requirements.md).
 
+## JSON API
+
+The JSON API is available at `/api/*` endpoints. Authentication is required via either:
+- **Session cookie**: Log in via the web UI
+- **Bearer token**: Set `API_TOKEN` in `.env` and use `Authorization: Bearer <token>` header
+
+### API Endpoints
+
+**Sites:**
+- `GET /api/sites` — List all sites
+- `POST /api/sites` — Create a site (body: `{"name": "...", "vpn_type": "wireguard|tailscale|openvpn", "local_subnet": "192.168.1.0/24"}`)
+- `GET /api/sites/{id}` — Get a site
+- `DELETE /api/sites/{id}` — Delete a site
+
+**Devices:**
+- `GET /api/sites/{id}/devices` — List devices for a site
+- `POST /api/sites/{id}/devices` — Add a device (body: `{"label": "...", "local_ip": "192.168.1.50"}`)
+- `DELETE /api/sites/{site_id}/devices/{device_id}` — Delete a device
+
+**Engineers:**
+- `GET /api/engineers` — List all engineers
+- `POST /api/engineers` — Create an engineer (body: `{"name": "John Smith"}`)
+- `GET /api/engineers/{id}` — Get an engineer
+- `POST /api/engineers/{id}/enable` — Enable engineer access
+- `POST /api/engineers/{id}/disable` — Disable engineer access
+- `DELETE /api/engineers/{id}` — Delete an engineer
+
+**Utilities:**
+- `POST /api/preview-virtual-ip` — Preview virtual IP translation (body: `{"local_ip": "...", "local_subnet": "...", "virtual_subnet": "..."}`)
+
+Interactive API docs are available at `/docs` (requires authentication).
+
+### Example
+
+```bash
+# With API token
+curl -H "Authorization: Bearer your-token" http://127.0.0.1:8000/api/sites
+
+# Create a WireGuard site
+curl -X POST -H "Authorization: Bearer your-token" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Site 1", "vpn_type": "wireguard", "local_subnet": "192.168.1.0/24"}' \
+  http://127.0.0.1:8000/api/sites
+```
+
 ## POC scope
 
-Included: multi-VPN site model, shared virtual IPs, fleet UI, Headscale join keys, WG `.conf`, OpenVPN `.ovpn`, status polling, Compose packaging.
+Included: multi-VPN site model, shared virtual IPs, fleet UI, Headscale join keys, WG `.conf`, OpenVPN `.ovpn`, status polling, Compose packaging, JSON API, engineer management.
 
 Later (not in this POC): linked multi-node hubs / single dashboard redundancy, engineer RBAC, `install.sh` wizard.

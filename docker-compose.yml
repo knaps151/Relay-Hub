@@ -10,7 +10,7 @@ services:
       - headscale-run:/var/run/headscale
     ports:
       - "8080:8080"
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     networks:
       - relay
 

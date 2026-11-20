@@ -10,6 +10,15 @@
     <a class="nav-link {% if request.url.path.startswith('/sites/new') %}active{% endif %}" href="/sites/new">
       <i class="bi bi-plus-circle me-2"></i>Add site
     </a>
+    <a class="nav-link {% if request.url.path.startswith('/engineers') %}active{% endif %}" href="/engineers">
+      <i class="bi bi-people me-2"></i>Engineers
+    </a>
+    <a class="nav-link {% if request.url.path.startswith('/connected') %}active{% endif %}" href="/connected">
+      <i class="bi bi-broadcast me-2"></i>Connected
+    </a>
+    <a class="nav-link {% if request.url.path.startswith('/access-log') %}active{% endif %}" href="/access-log">
+      <i class="bi bi-journal-text me-2"></i>Access log
+    </a>
     <a class="nav-link {% if request.url.path in ['/settings', '/setup'] %}active{% endif %}" href="/settings">
       <i class="bi bi-gear me-2"></i>Settings
     </a>
