@@ -478,8 +478,19 @@ def site_detail(request: Request, site_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Site not found")
     settings = get_or_create_settings(db)
     join_cmd = None
+    qr_data_uri = None
     if site.vpn_type == "tailscale":
         join_cmd = tailscale_join_cmd(db, site)
+        from app.services.qrcode_svg import svg_data_uri
+
+        qr_data_uri = svg_data_uri(join_cmd)
+    elif site.vpn_type == "wireguard":
+        try:
+            from app.services.qrcode_svg import svg_data_uri
+
+            qr_data_uri = svg_data_uri(wireguard_client_conf(db, site))
+        except Exception:
+            qr_data_uri = None
     # Get recent access events for this site
     from app.services.audit import get_site_recent_events
     recent_events = get_site_recent_events(db, site_id=site.id, limit=10)
@@ -490,6 +501,7 @@ def site_detail(request: Request, site_id: int, db: Session = Depends(get_db)):
             "settings": settings,
             "site": site,
             "join_cmd": join_cmd,
+            "qr_data_uri": qr_data_uri,
             "cfg": get_settings(),
             "security_warning": _security_warning(),
             "recent_events": recent_events,
@@ -762,12 +774,21 @@ def engineer_detail(request: Request, engineer_id: int, db: Session = Depends(ge
     if not engineer:
         raise HTTPException(404, "Engineer not found")
     settings = get_or_create_settings(db)
+    qr_data_uri = None
+    try:
+        from app.services.engineers import render_engineer_conf
+        from app.services.qrcode_svg import svg_data_uri
+
+        qr_data_uri = svg_data_uri(render_engineer_conf(db, engineer))
+    except Exception:
+        qr_data_uri = None
     return templates.TemplateResponse(
         request,
         "engineer_detail.html",
         {
             "settings": settings,
             "engineer": engineer,
+            "qr_data_uri": qr_data_uri,
             "security_warning": _security_warning(),
         },
     )

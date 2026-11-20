@@ -9,3 +9,4 @@ python-multipart==0.0.20
 cryptography==44.0.0
 aiofiles==24.1.0
 pytest==8.3.4
+segno==1.6.1

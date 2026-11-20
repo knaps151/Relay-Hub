@@ -10,10 +10,6 @@
 <a class="btn btn-outline-secondary btn-sm" href="/engineers">Engineers</a>
 {% endblock %}
 
-{% block head %}
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-{% endblock %}
-
 {% block body %}
 <div class="row g-3 mb-3">
   <div class="col-lg-6">
@@ -75,7 +71,13 @@ PersistentKeepalive = 25</pre>
         <p class="text-secondary small mt-2 mb-0">On phone: WireGuard → Create from QR, or Create from file (import the downloaded <span class="mono">.conf</span>). Do not paste into a blank tunnel manually.</p>
       </div>
       <div class="col-lg-5">
-        <div class="qr-box" id="qr-output"></div>
+        <div class="qr-box" id="qr-output">
+          {% if qr_data_uri %}
+          <img src="{{ qr_data_uri }}" alt="WireGuard QR code" width="180" height="180">
+          {% else %}
+          <span class="text-secondary small">QR unavailable — use Download .conf</span>
+          {% endif %}
+        </div>
       </div>
     </div>
   </div>
@@ -104,19 +106,5 @@ async function copyEngineerConf() {
     showToast('Copy failed', false);
   }
 }
-
-(async function () {
-  try {
-    const response = await fetch('/engineers/{{ engineer.id }}/wireguard.conf');
-    const conf = await response.text();
-    const el = document.getElementById('qr-output');
-    if (!el || typeof QRCode === 'undefined') return;
-    QRCode.toCanvas(document.createElement('canvas'), conf, { width: 160, margin: 1 }, function (err, canvas) {
-      if (err) { el.textContent = 'QR unavailable'; return; }
-      el.innerHTML = '';
-      el.appendChild(canvas);
-    });
-  } catch (e) {}
-})();
 </script>
 {% endblock %}

@@ -17,10 +17,6 @@
 </form>
 {% endblock %}
 
-{% block head %}
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-{% endblock %}
-
 {% block body %}
 {% if site.notes %}
 <div class="alert alert-warning">{{ site.notes }}</div>
@@ -252,10 +248,17 @@
           </div>
           <div class="col-lg-4">
             <div class="fw-semibold mb-2">QR</div>
-            <div class="qr-box" id="qrcode"></div>
+            <div class="qr-box" id="qrcode">
+              {% if qr_data_uri %}
+              <img src="{{ qr_data_uri }}" alt="Setup QR code" width="180" height="180">
+              {% else %}
+              <span class="text-secondary small">QR unavailable</span>
+              {% endif %}
+            </div>
             <p class="text-secondary small mt-2 mb-0">
               {% if site.vpn_type == 'tailscale' %}Scan to share the join command.
-              {% else %}Scan for the download URL.
+              {% elif site.vpn_type == 'wireguard' %}Scan in the WireGuard app (Create from QR).
+              {% else %}Use Download .ovpn on this device.
               {% endif %}
             </p>
           </div>
@@ -294,32 +297,5 @@
     preview.innerHTML = 'Reachable at <span class="mono">' + vip + '</span>';
   }
 
-  (async function renderQr() {
-    const el = document.getElementById('qrcode');
-    if (!el || typeof QRCode === 'undefined') return;
-    let payload = '';
-    {% if site.vpn_type == 'tailscale' %}
-    payload = document.getElementById('join-cmd')?.innerText || '';
-    {% elif site.vpn_type == 'wireguard' %}
-    try {
-      const response = await fetch('/sites/{{ site.id }}/wireguard.conf');
-      payload = await response.text();
-      if (!response.ok || payload.trim().startsWith('<')) {
-        el.textContent = 'QR unavailable — open this page while logged in';
-        return;
-      }
-    } catch (e) {
-      el.textContent = 'QR unavailable';
-      return;
-    }
-    {% else %}
-    payload = window.location.origin + '/sites/{{ site.id }}/client.ovpn';
-    {% endif %}
-    QRCode.toCanvas(document.createElement('canvas'), payload, { width: 180, margin: 1, errorCorrectionLevel: 'M' }, function (err, canvas) {
-      if (err) { el.textContent = 'QR unavailable'; return; }
-      el.innerHTML = '';
-      el.appendChild(canvas);
-    });
-  })();
 </script>
 {% endblock %}
