@@ -1,107 +1,232 @@
 {% extends "base.html" %}
 {% block title %}{{ site.name }} · ParkTech Relay{% endblock %}
+{% block page_title %}{{ site.name }}{% endblock %}
+{% block page_subtitle %}
+  {% if site.vpn_type == 'tailscale' %}<span class="badge text-bg-info">Tailscale</span>
+  {% elif site.vpn_type == 'wireguard' %}<span class="badge text-bg-warning">WireGuard</span>
+  {% else %}<span class="badge text-bg-secondary">OpenVPN</span>{% endif %}
+  {% if site.online %}<span class="badge text-bg-success">Online</span>{% else %}<span class="badge text-bg-danger">Offline</span>{% endif %}
+  · <span class="mono">{{ site.virtual_subnet }}</span>
+  {% if site.region %}· {{ site.region }}{% endif %}
+{% endblock %}
+{% block topbar_actions %}
+<a class="btn btn-outline-secondary btn-sm" href="/">Fleet</a>
+<form method="post" action="/sites/{{ site.id }}/delete" class="m-0" onsubmit="return confirm('Delete this site?')">
+  <button class="btn btn-outline-danger btn-sm" type="submit">Delete</button>
+</form>
+{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+{% endblock %}
+
 {% block body %}
-<header class="app">
-  <div class="brand">
-    <strong>{{ site.name }}</strong>
-    <span>
-      <span class="badge {{ 'ts' if site.vpn_type=='tailscale' else 'wg' if site.vpn_type=='wireguard' else 'ovpn' }}">{{ site.vpn_type }}</span>
-      {% if site.online %}<span class="badge online">Online</span>{% else %}<span class="badge offline">Offline</span>{% endif %}
-      · virtual <span class="mono">{{ site.virtual_subnet }}</span>
-    </span>
-  </div>
-  <nav>
-    <a href="/">Fleet</a>
-    <form method="post" action="/sites/{{ site.id }}/delete" style="display:inline" onsubmit="return confirm('Delete this site?')">
-      <button class="danger" type="submit">Delete</button>
-    </form>
-  </nav>
-</header>
+{% if site.notes %}
+<div class="alert alert-warning">{{ site.notes }}</div>
+{% endif %}
 
-<div class="grid two">
-  <div class="panel">
-    <h3>Access model</h3>
-    <p>Local LAN <span class="mono">{{ site.local_subnet }}</span> maps 1:1 onto <span class="mono">{{ site.virtual_subnet }}</span>.</p>
-    <p class="muted">Engineers always use the virtual IPs below — not Tailscale 100.x, WG tunnel IPs, or OpenVPN client IPs.</p>
-    {% if site.notes %}<div class="flash-error">{{ site.notes }}</div>{% endif %}
+<div class="card mb-3" id="cheat-sheet">
+  <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span class="fw-semibold">Device IP cheat sheet</span>
+    <span class="text-secondary small">Local {{ site.local_subnet }} → virtual {{ site.virtual_subnet }}</span>
   </div>
-  <div class="panel">
-    <h3>Tunnel setup</h3>
-    {% if site.vpn_type == 'tailscale' %}
-      <p class="muted">Join the site edge with Tailscale against Headscale, advertising the virtual subnet:</p>
-      <pre class="cmd" id="join-cmd">{{ join_cmd }}</pre>
-      <div class="row">
-        <button type="button" class="secondary copy-btn" onclick="copyText(document.getElementById('join-cmd').innerText)">Copy command</button>
-        <form method="post" action="/sites/{{ site.id }}/tailscale/refresh-key">
-          <button class="secondary" type="submit">Refresh pre-auth key</button>
-        </form>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Equipment</th>
+            <th>Type</th>
+            <th>Local IP</th>
+            <th>Reachable VPN IP</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in site.devices %}
+          <tr>
+            <td class="fw-semibold">{{ d.label }}</td>
+            <td class="text-secondary">{{ d.device_type }}</td>
+            <td class="mono">{{ d.local_ip }}</td>
+            <td class="mono">{{ d.virtual_ip }}</td>
+            <td>
+              <div class="table-actions d-flex flex-wrap gap-1">
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyText('{{ d.virtual_ip }}', '{{ d.virtual_ip }}')">Copy IP</button>
+                {% if d.admin_port %}
+                  {% if d.device_type == 'ev_charger' %}
+                  <a class="btn btn-sm btn-outline-primary" href="http://{{ d.virtual_ip }}:{{ d.admin_port }}" target="_blank" rel="noopener">Open OCPP/UI</a>
+                  {% else %}
+                  <a class="btn btn-sm btn-outline-primary" href="http://{{ d.virtual_ip }}:{{ d.admin_port }}" target="_blank" rel="noopener">Open UI</a>
+                  {% endif %}
+                {% endif %}
+                {% if d.device_type in ['camera', 'anpr'] %}
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyText('rtsp://{{ d.virtual_ip }}:554/stream', 'RTSP URL')">Copy RTSP</button>
+                {% endif %}
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        hx-post="/sites/{{ site.id }}/devices/{{ d.id }}/ping"
+                        hx-swap="none">Ping</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#edit-device-{{ d.id }}">Edit</button>
+                <form method="post" action="/sites/{{ site.id }}/devices/{{ d.id }}/delete" class="d-inline" onsubmit="return confirm('Delete device?')">
+                  <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-center text-secondary py-4">No devices yet — add equipment below.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% for d in site.devices %}
+<div class="modal fade" id="edit-device-{{ d.id }}" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form class="modal-content" method="post" action="/sites/{{ site.id }}/devices/{{ d.id }}/edit">
+      <div class="modal-header">
+        <h5 class="modal-title">Edit {{ d.label }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <p class="muted" style="margin-top:0.75rem">On the site host, also run <span class="mono">scripts/site-netmap-example.sh {{ site.virtual_subnet }} {{ site.local_subnet }}</span> then approve routes.</p>
-    {% elif site.vpn_type == 'wireguard' %}
-      <p class="muted">Download the peer config and import on the site router / <span class="mono">wg-quick</span>.</p>
-      <p class="mono">Tunnel IP: {{ site.wg_tunnel_ip }}</p>
-      <a class="btn" href="/sites/{{ site.id }}/wireguard.conf">Download .conf</a>
-      <p class="muted" style="margin-top:0.75rem">Endpoint embedded: <span class="mono">{{ settings.wg_endpoint }}</span></p>
-    {% else %}
-      <p class="muted">Download the OpenVPN client profile (TCP).</p>
-      <p class="mono">CN: {{ site.ovpn_common_name }} · client IP {{ site.ovpn_client_ip }}</p>
-      <a class="btn" href="/sites/{{ site.id }}/client.ovpn">Download .ovpn</a>
-      <p class="muted" style="margin-top:0.75rem">Endpoint embedded: <span class="mono">{{ settings.openvpn_endpoint }}</span></p>
-    {% endif %}
+      <div class="modal-body row g-3">
+        <div class="col-12">
+          <label class="form-label">Label</label>
+          <input class="form-control" name="label" value="{{ d.label }}" required>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Device type</label>
+          <input class="form-control" name="device_type" value="{{ d.device_type }}" required>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Admin port</label>
+          <input class="form-control" name="admin_port" value="{{ d.admin_port or '' }}">
+        </div>
+        <div class="col-12">
+          <label class="form-label">Local IP</label>
+          <input class="form-control" name="local_ip" value="{{ d.local_ip }}" required>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+
+<div class="card mb-3">
+  <div class="card-header fw-semibold">Add device</div>
+  <div class="card-body">
+    <div class="d-flex flex-wrap gap-2 mb-3" id="preset-buttons">
+      {% for p in presets %}
+      <button type="button" class="btn btn-sm btn-outline-secondary preset-btn"
+              data-type="{{ p.device_type }}"
+              data-port="{{ p.admin_port or '' }}"
+              data-label="{{ p.label }}">{{ p.label }}</button>
+      {% endfor %}
+    </div>
+    <form method="post" action="/sites/{{ site.id }}/devices" class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label">Label</label>
+        <input class="form-control" id="device-label" name="label" placeholder="Entry ANPR Camera" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Device type</label>
+        <input class="form-control" id="device-type" name="device_type" value="generic" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Local IP</label>
+        <input class="form-control" name="local_ip" placeholder="192.168.1.2" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Admin port</label>
+        <input class="form-control" id="device-port" name="admin_port" placeholder="80">
+      </div>
+      <div class="col-12">
+        <button class="btn btn-primary" type="submit">Add to cheat sheet</button>
+      </div>
+    </form>
   </div>
 </div>
 
-<div class="panel">
-  <h2>Device IP cheat sheet</h2>
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Equipment</th>
-        <th>Type</th>
-        <th>Local IP</th>
-        <th>Reachable VPN IP</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for d in site.devices %}
-      <tr>
-        <td>{{ d.label }}</td>
-        <td class="muted">{{ d.device_type }}</td>
-        <td class="mono">{{ d.local_ip }}</td>
-        <td class="mono">{{ d.virtual_ip }}</td>
-        <td class="row">
-          <button type="button" class="secondary copy-btn" onclick="copyText('{{ d.virtual_ip }}')">Copy IP</button>
-          {% if d.admin_port %}
-          <a class="btn secondary" href="http://{{ d.virtual_ip }}:{{ d.admin_port }}" target="_blank" rel="noopener">Open UI</a>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div class="accordion mb-3" id="installer-accordion">
+  <div class="accordion-item">
+    <h2 class="accordion-header">
+      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#installer-panel">
+        Installer / tunnel setup
+      </button>
+    </h2>
+    <div id="installer-panel" class="accordion-collapse collapse" data-bs-parent="#installer-accordion">
+      <div class="accordion-body">
+        <div class="row g-3">
+          <div class="col-lg-8">
+            {% if site.vpn_type == 'tailscale' %}
+            <p class="text-secondary">Join the site edge with Tailscale against Headscale, advertising the virtual subnet:</p>
+            <pre class="bg-light border rounded p-3 mono" id="join-cmd">{{ join_cmd }}</pre>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+              <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyText(document.getElementById('join-cmd').innerText, 'join command')">Copy command</button>
+              <form method="post" action="/sites/{{ site.id }}/tailscale/refresh-key" class="m-0">
+                <button class="btn btn-outline-secondary btn-sm" type="submit">Refresh pre-auth key</button>
+              </form>
+            </div>
+            <p class="text-secondary small mb-0">Also run site NETMAP helper, then approve routes in Headscale.</p>
+            {% elif site.vpn_type == 'wireguard' %}
+            <p class="text-secondary">Download the peer config for the site router / <span class="mono">wg-quick</span>.</p>
+            <p class="mono">Tunnel IP: {{ site.wg_tunnel_ip }}</p>
+            <p class="text-secondary small">Endpoint: <span class="mono">{{ settings.wg_endpoint }}</span></p>
+            <a class="btn btn-primary" href="/sites/{{ site.id }}/wireguard.conf">Download .conf</a>
+            {% else %}
+            <p class="text-secondary">Download the OpenVPN client profile (TCP).</p>
+            <p class="mono">CN: {{ site.ovpn_common_name }} · {{ site.ovpn_client_ip }}</p>
+            <p class="text-secondary small">Endpoint: <span class="mono">{{ settings.openvpn_endpoint }}</span></p>
+            <a class="btn btn-primary" href="/sites/{{ site.id }}/client.ovpn">Download .ovpn</a>
+            {% endif %}
+          </div>
+          <div class="col-lg-4">
+            <div class="fw-semibold mb-2">QR</div>
+            <div class="qr-box" id="qrcode"></div>
+            <p class="text-secondary small mt-2 mb-0">
+              {% if site.vpn_type == 'tailscale' %}Scan to copy/share the join command.
+              {% else %}Scan for the download URL (open on a device that can reach this hub).
+              {% endif %}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
+{% endblock %}
 
-<div class="panel">
-  <h3>Add device</h3>
-  <form method="post" action="/sites/{{ site.id }}/devices" class="grid two">
-    <div>
-      <label>Label</label>
-      <input name="label" placeholder="Entry ANPR Camera" required>
-    </div>
-    <div>
-      <label>Device type</label>
-      <input name="device_type" value="generic">
-    </div>
-    <div>
-      <label>Local IP</label>
-      <input name="local_ip" placeholder="192.168.1.2" required>
-    </div>
-    <div>
-      <label>Admin port (optional)</label>
-      <input name="admin_port" placeholder="80">
-    </div>
-    <div><button type="submit">Add to cheat sheet</button></div>
-  </form>
-</div>
+{% block scripts %}
+<script>
+  document.querySelectorAll('.preset-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.getElementById('device-type').value = btn.dataset.type;
+      document.getElementById('device-port').value = btn.dataset.port || '';
+      const label = document.getElementById('device-label');
+      if (!label.value) label.value = btn.dataset.label;
+    });
+  });
+
+  (function renderQr() {
+    const el = document.getElementById('qrcode');
+    if (!el || typeof QRCode === 'undefined') return;
+    let payload = '';
+    {% if site.vpn_type == 'tailscale' %}
+    payload = document.getElementById('join-cmd')?.innerText || '';
+    {% elif site.vpn_type == 'wireguard' %}
+    payload = window.location.origin + '/sites/{{ site.id }}/wireguard.conf';
+    {% else %}
+    payload = window.location.origin + '/sites/{{ site.id }}/client.ovpn';
+    {% endif %}
+    QRCode.toCanvas(document.createElement('canvas'), payload, { width: 160, margin: 1 }, function (err, canvas) {
+      if (err) { el.textContent = 'QR unavailable'; return; }
+      el.innerHTML = '';
+      el.appendChild(canvas);
+    });
+  })();
+</script>
 {% endblock %}

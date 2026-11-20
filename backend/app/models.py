@@ -32,6 +32,7 @@ class Site(Base):
     name: Mapped[str] = mapped_column(String(200))
     site_code: Mapped[str] = mapped_column(String(64))
     vpn_type: Mapped[str] = mapped_column(String(32))  # tailscale | wireguard | openvpn
+    region: Mapped[str] = mapped_column(String(120), default="")
     site_index: Mapped[int] = mapped_column(Integer)
     virtual_subnet: Mapped[str] = mapped_column(String(64))
     local_subnet: Mapped[str] = mapped_column(String(64), default="192.168.1.0/24")

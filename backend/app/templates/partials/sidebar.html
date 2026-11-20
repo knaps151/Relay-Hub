@@ -1,0 +1,17 @@
+<aside class="sidebar">
+  <div class="brand">
+    <strong>ParkTech Relay</strong>
+    <small>{{ settings.operator_name if settings else 'Fleet hub' }}</small>
+  </div>
+  <nav class="nav flex-column py-2">
+    <a class="nav-link {% if request.url.path == '/' %}active{% endif %}" href="/">
+      <i class="bi bi-speedometer2 me-2"></i>Fleet
+    </a>
+    <a class="nav-link {% if request.url.path.startswith('/sites/new') %}active{% endif %}" href="/sites/new">
+      <i class="bi bi-plus-circle me-2"></i>Add site
+    </a>
+    <a class="nav-link {% if request.url.path in ['/settings', '/setup'] %}active{% endif %}" href="/settings">
+      <i class="bi bi-gear me-2"></i>Settings
+    </a>
+  </nav>
+</aside>

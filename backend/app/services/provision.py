@@ -70,6 +70,7 @@ def create_site(
     vpn_type: str,
     local_subnet: str | None = None,
     site_code: str | None = None,
+    region: str | None = None,
 ) -> Site:
     if vpn_type not in {"tailscale", "wireguard", "openvpn"}:
         raise ValueError("vpn_type must be tailscale, wireguard, or openvpn")
@@ -88,6 +89,7 @@ def create_site(
         name=name,
         site_code=code,
         vpn_type=vpn_type,
+        region=(region or "").strip(),
         site_index=site_index,
         virtual_subnet=virtual_subnet,
         local_subnet=local_subnet,

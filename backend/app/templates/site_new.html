@@ -1,39 +1,100 @@
 {% extends "base.html" %}
 {% block title %}New site · ParkTech Relay{% endblock %}
-{% block body %}
-<header class="app">
-  <div class="brand">
-    <strong>Add site</strong>
-    <span>Same virtual IP plan for every VPN type</span>
-  </div>
-  <nav><a href="/">Back to fleet</a></nav>
-</header>
+{% block page_title %}Add site{% endblock %}
+{% block page_subtitle %}Same virtual IP plan for every VPN type{% endblock %}
 
-<div class="panel">
-  {% if error %}<div class="flash-error">{{ error }}</div>{% endif %}
-  <form method="post" action="/sites/new" class="form-stack">
-    <div>
-      <label>Site name</label>
-      <input name="name" placeholder="North Street Car Park" required>
+{% block body %}
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<form method="post" action="/sites/new" id="new-site-form">
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">Site details</div>
+    <div class="card-body row g-3">
+      <div class="col-md-6">
+        <label class="form-label">Site name</label>
+        <input class="form-control" name="name" placeholder="North Street Car Park" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Site code (optional)</label>
+        <input class="form-control" name="site_code" placeholder="north-street">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Region (optional)</label>
+        <input class="form-control" name="region" placeholder="London" list="region-suggestions">
+        <datalist id="region-suggestions">
+          {% for r in regions %}
+          <option value="{{ r }}"></option>
+          {% endfor %}
+        </datalist>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Local LAN subnet</label>
+        <input class="form-control" name="local_subnet" value="192.168.1.0/24" required>
+      </div>
+      <div class="col-md-6 d-flex align-items-end">
+        <p class="text-secondary small mb-2">Next free virtual subnet from <span class="mono">{{ settings.base_cidr }}</span>.</p>
+      </div>
     </div>
-    <div>
-      <label>Site code (optional)</label>
-      <input name="site_code" placeholder="north-street">
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">How will this site connect?</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="vpn-card card selected" id="card-tailscale">
+            <input type="radio" name="vpn_type" value="tailscale" checked>
+            <div class="card-body">
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <i class="bi bi-broadcast-pin fs-4 text-info"></i>
+                <strong>Tailscale</strong>
+              </div>
+              <p class="text-secondary small mb-0">Best for 4G / CGNAT SIMs and NAT traversal via Headscale.</p>
+            </div>
+          </label>
+        </div>
+        <div class="col-md-4">
+          <label class="vpn-card card" id="card-wireguard">
+            <input type="radio" name="vpn_type" value="wireguard">
+            <div class="card-body">
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <i class="bi bi-lightning-charge fs-4 text-warning"></i>
+                <strong>WireGuard</strong>
+              </div>
+              <p class="text-secondary small mb-0">Best for fast site broadband with a reachable UDP endpoint.</p>
+            </div>
+          </label>
+        </div>
+        <div class="col-md-4">
+          <label class="vpn-card card" id="card-openvpn">
+            <input type="radio" name="vpn_type" value="openvpn">
+            <div class="card-body">
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <i class="bi bi-shield-lock fs-4 text-secondary"></i>
+                <strong>OpenVPN</strong>
+              </div>
+              <p class="text-secondary small mb-0">Best for locked-down corporate firewalls (TCP profile).</p>
+            </div>
+          </label>
+        </div>
+      </div>
     </div>
-    <div>
-      <label>VPN transport</label>
-      <select name="vpn_type" required>
-        <option value="tailscale">Tailscale (Headscale) — best for 4G / NAT</option>
-        <option value="wireguard">WireGuard — high speed hub-and-spoke</option>
-        <option value="openvpn">OpenVPN — strict firewalls (TCP)</option>
-      </select>
-    </div>
-    <div>
-      <label>Local LAN subnet</label>
-      <input name="local_subnet" value="192.168.1.0/24" required>
-    </div>
-    <p class="muted">Next free virtual subnet will be carved from <span class="mono">{{ settings.base_cidr }}</span> (e.g. 10.101.0.0/24, 10.101.1.0/24, …).</p>
-    <button type="submit">Create site</button>
-  </form>
-</div>
+  </div>
+
+  <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i> Create site</button>
+  <a class="btn btn-outline-secondary" href="/">Cancel</a>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.querySelectorAll('.vpn-card input').forEach((input) => {
+    input.addEventListener('change', () => {
+      document.querySelectorAll('.vpn-card').forEach((c) => c.classList.remove('selected'));
+      input.closest('.vpn-card').classList.add('selected');
+    });
+  });
+</script>
 {% endblock %}

@@ -1,0 +1,61 @@
+<div id="fleet-table"
+     hx-get="/partials/fleet?q={{ q|urlencode }}&vpn_type={{ vpn_filter|urlencode }}&region={{ region_filter|urlencode }}"
+     hx-trigger="every 15s"
+     hx-swap="outerHTML">
+  {% if not sites %}
+  <div class="text-center py-5">
+    <p class="text-secondary mb-3">No sites match these filters.</p>
+    <a class="btn btn-primary" href="/sites/new"><i class="bi bi-plus-lg"></i> Add site</a>
+  </div>
+  {% else %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Site</th>
+          <th>Region</th>
+          <th>VPN</th>
+          <th>Virtual subnet</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for site in sites %}
+        <tr class="{% if not site.online %}table-warning{% endif %}" style="cursor:pointer"
+            onclick="window.location='/sites/{{ site.id }}#cheat-sheet'">
+          <td>
+            <div class="fw-semibold">{{ site.name }}</div>
+            <div class="text-secondary small mono">{{ site.site_code }}</div>
+          </td>
+          <td>{{ site.region or '—' }}</td>
+          <td>
+            {% if site.vpn_type == 'tailscale' %}
+            <span class="badge text-bg-info">Tailscale</span>
+            {% elif site.vpn_type == 'wireguard' %}
+            <span class="badge text-bg-warning">WireGuard</span>
+            {% else %}
+            <span class="badge text-bg-secondary">OpenVPN</span>
+            {% endif %}
+          </td>
+          <td class="mono">{{ site.virtual_subnet }}</td>
+          <td>
+            {% if site.online %}
+            <span class="badge text-bg-success">Online</span>
+            {% else %}
+            <span class="badge text-bg-danger">Offline</span>
+            {% endif %}
+            {% if site.last_seen %}
+            <div class="text-secondary small">{{ site.last_seen|timeago }}</div>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-outline-primary" href="/sites/{{ site.id }}#cheat-sheet" onclick="event.stopPropagation()">Open</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>

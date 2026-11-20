@@ -1,51 +1,73 @@
 {% extends "base.html" %}
 {% block title %}Settings · ParkTech Relay{% endblock %}
-{% block body %}
-<header class="app">
-  <div class="brand">
-    <strong>ParkTech Relay</strong>
-    <span>{% if settings.setup_completed %}Hub settings{% else %}First-run setup{% endif %}</span>
-  </div>
-  {% if settings.setup_completed %}
-  <nav>
-    <a href="/">Fleet</a>
-    <form method="post" action="/logout" style="display:inline"><button class="secondary" type="submit">Logout</button></form>
-  </nav>
-  {% endif %}
-</header>
+{% block page_title %}{% if settings.setup_completed %}Settings{% else %}First-run setup{% endif %}{% endblock %}
+{% block page_subtitle %}Endpoints and virtual IP plan{% endblock %}
 
-<div class="panel">
-  <p class="muted">Keep UI / Headscale / WireGuard / OpenVPN endpoints separate — especially when using ngrok for the dashboard only.</p>
-  <form method="post" action="/setup" class="form-stack">
-    <div>
-      <label>Operator name</label>
-      <input name="operator_name" value="{{ settings.operator_name }}" required>
+{% block body %}
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header fw-semibold">Hub configuration</div>
+      <div class="card-body">
+        <p class="text-secondary">Keep UI / Headscale / WireGuard / OpenVPN endpoints separate — especially when using ngrok for the dashboard only.</p>
+        <form method="post" action="/setup" class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Operator name</label>
+            <input class="form-control" name="operator_name" value="{{ settings.operator_name }}" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Domain (optional)</label>
+            <input class="form-control" name="domain" value="{{ settings.domain or '' }}" placeholder="relay.example.co.uk">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Public UI URL</label>
+            <input class="form-control" name="public_ui_url" value="{{ settings.public_ui_url }}" required>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Headscale login-server URL</label>
+            <input class="form-control" name="headscale_url" value="{{ settings.headscale_url }}" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">WireGuard endpoint</label>
+            <input class="form-control" name="wg_endpoint" value="{{ settings.wg_endpoint }}" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">OpenVPN endpoint</label>
+            <input class="form-control" name="openvpn_endpoint" value="{{ settings.openvpn_endpoint }}" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Virtual base CIDR</label>
+            <input class="form-control" name="base_cidr" value="{{ settings.base_cidr }}" required>
+          </div>
+          <div class="col-12">
+            <button class="btn btn-primary" type="submit">Save</button>
+          </div>
+        </form>
+      </div>
     </div>
-    <div>
-      <label>Domain (optional, for later Caddy / Let's Encrypt)</label>
-      <input name="domain" value="{{ settings.domain or '' }}" placeholder="relay.example.co.uk">
+  </div>
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header fw-semibold">System status</div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-5">Headscale</dt>
+          <dd class="col-7">
+            {% if headscale_ready %}<span class="badge text-bg-success">ready</span>{% else %}<span class="badge text-bg-danger">not ready</span>{% endif %}
+          </dd>
+          <dt class="col-5">OpenVPN PKI</dt>
+          <dd class="col-7">
+            {% if openvpn_ready %}<span class="badge text-bg-success">ready</span>{% else %}<span class="badge text-bg-warning">waiting</span>{% endif %}
+          </dd>
+          <dt class="col-5">WG dry-run</dt>
+          <dd class="col-7 mono">{{ cfg.wg_dry_run }}</dd>
+          <dt class="col-5">NFT dry-run</dt>
+          <dd class="col-7 mono">{{ cfg.nft_dry_run }}</dd>
+          <dt class="col-5">UI URL</dt>
+          <dd class="col-7 mono text-break">{{ settings.public_ui_url }}</dd>
+        </dl>
+      </div>
     </div>
-    <div>
-      <label>Public UI URL (browser / ngrok)</label>
-      <input name="public_ui_url" value="{{ settings.public_ui_url }}" required>
-    </div>
-    <div>
-      <label>Headscale login-server URL</label>
-      <input name="headscale_url" value="{{ settings.headscale_url }}" required>
-    </div>
-    <div>
-      <label>WireGuard endpoint (host:port)</label>
-      <input name="wg_endpoint" value="{{ settings.wg_endpoint }}" required>
-    </div>
-    <div>
-      <label>OpenVPN endpoint (host:port)</label>
-      <input name="openvpn_endpoint" value="{{ settings.openvpn_endpoint }}" required>
-    </div>
-    <div>
-      <label>Virtual base CIDR (shared IP plan)</label>
-      <input name="base_cidr" value="{{ settings.base_cidr }}" required>
-    </div>
-    <button type="submit">Save and continue</button>
-  </form>
+  </div>
 </div>
 {% endblock %}

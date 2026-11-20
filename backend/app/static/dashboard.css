@@ -1,0 +1,150 @@
+:root {
+  --pt-sidebar: #212529;
+  --pt-accent: #0d6efd;
+}
+
+body {
+  min-height: 100vh;
+  background: #f4f6f9;
+}
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: var(--pt-sidebar);
+  color: #fff;
+  min-height: 100vh;
+}
+
+.sidebar .brand {
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sidebar .brand strong {
+  display: block;
+  font-size: 1.05rem;
+}
+
+.sidebar .brand small {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.sidebar .nav-link {
+  color: rgba(255, 255, 255, 0.75);
+  border-radius: 0.4rem;
+  margin: 0.15rem 0.6rem;
+  padding: 0.55rem 0.75rem;
+}
+
+.sidebar .nav-link:hover,
+.sidebar .nav-link.active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar .nav-link.active {
+  background: var(--pt-accent);
+}
+
+.main-area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  background: #fff;
+  border-bottom: 1px solid #dee2e6;
+  padding: 0.75rem 1.25rem;
+}
+
+.content {
+  padding: 1.25rem;
+}
+
+.stat-card .stat-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.stat-card .stat-label {
+  color: #6c757d;
+  font-size: 0.85rem;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.875em;
+}
+
+.vpn-card {
+  cursor: pointer;
+  border: 2px solid #dee2e6;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  height: 100%;
+}
+
+.vpn-card:hover {
+  border-color: #86b7fe;
+}
+
+.vpn-card.selected {
+  border-color: var(--pt-accent);
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+}
+
+.vpn-card input {
+  display: none;
+}
+
+.table-actions .btn {
+  white-space: nowrap;
+}
+
+.qr-box {
+  width: 180px;
+  height: 180px;
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+}
+
+.qr-box canvas,
+.qr-box img {
+  max-width: 100%;
+  height: auto;
+}
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(145deg, #1b2430 0%, #2c3e50 50%, #1b2430 100%);
+}
+
+.checklist-item i {
+  width: 1.25rem;
+}
+
+@media (max-width: 991.98px) {
+  .sidebar {
+    width: 100%;
+    min-height: auto;
+  }
+  .app-shell {
+    flex-direction: column;
+  }
+}

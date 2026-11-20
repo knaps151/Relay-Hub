@@ -1,18 +1,24 @@
 {% extends "base.html" %}
 {% block title %}Login · ParkTech Relay{% endblock %}
-{% block body %}
-<div class="login-wrap panel">
-  <div class="brand" style="margin-bottom:1rem">
-    <strong>ParkTech Relay</strong>
-    <span>Self-hosted multi-VPN hub</span>
-  </div>
-  {% if error %}<div class="flash-error">{{ error }}</div>{% endif %}
-  <form method="post" action="/login" class="form-stack">
-    <div>
-      <label for="password">Admin password</label>
-      <input id="password" type="password" name="password" required autofocus>
+{% block login_body %}
+<div class="login-page">
+  <div class="card shadow" style="width: min(420px, 92vw)">
+    <div class="card-body p-4">
+      <div class="mb-3">
+        <h1 class="h4 mb-1">ParkTech Relay</h1>
+        <p class="text-secondary mb-0">Sign in to the fleet hub</p>
+      </div>
+      {% if error %}
+      <div class="alert alert-danger py-2">{{ error }}</div>
+      {% endif %}
+      <form method="post" action="/login">
+        <div class="mb-3">
+          <label class="form-label" for="password">Admin password</label>
+          <input class="form-control" id="password" type="password" name="password" required autofocus>
+        </div>
+        <button class="btn btn-primary w-100" type="submit">Sign in</button>
+      </form>
     </div>
-    <button type="submit">Sign in</button>
-  </form>
+  </div>
 </div>
 {% endblock %}
