@@ -41,7 +41,7 @@ from app.services.provision import (
 from app.services.subnets import virtual_ip_for_local
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("parktech.relay")
+logger = logging.getLogger("relay.hub")
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -73,14 +73,14 @@ def _is_insecure_config() -> bool:
     """Check if the app is running with an insecure configuration."""
     cfg = get_settings()
     # Insecure if using default password AND not in HTTP_ONLY mode (i.e., production)
-    return cfg.admin_password == "parktech" and not cfg.http_only
+    return cfg.admin_password == "relay" and not cfg.http_only
 
 
 def _security_warning() -> str | None:
     """Return a security warning message if applicable."""
     if _is_insecure_config():
         return (
-            "SECURITY WARNING: You are using the default password 'parktech' "
+            "SECURITY WARNING: You are using the default password 'relay' "
             "in production mode (HTTP_ONLY=0). Change ADMIN_PASSWORD in .env immediately!"
         )
     return None
@@ -141,7 +141,7 @@ async def lifespan(app: FastAPI):
         pass
 
 
-app = FastAPI(title="ParkTech Relay", lifespan=lifespan)
+app = FastAPI(title="Relay Hub", lifespan=lifespan)
 static_dir = BASE_DIR / "static"
 static_dir.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")

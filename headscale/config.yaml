@@ -46,7 +46,7 @@ policy:
 
 dns:
   magic_dns: true
-  base_domain: relay.parktech.internal
+  base_domain: relay.hub.internal
   nameservers:
     global:
       - 1.1.1.1

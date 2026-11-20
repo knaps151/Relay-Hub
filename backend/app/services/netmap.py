@@ -1,4 +1,4 @@
-"""Hub-side 1:1 NETMAP: virtual ParkTech subnets ↔ site LAN prefixes.
+"""Hub-side 1:1 NETMAP: virtual Relay Hub subnets ↔ site LAN prefixes.
 
 Engineers address devices as 10.101.X.Y. The hub DNATs to the site's real
 LAN (e.g. 10.0.0.Y) before the packet enters the site WireGuard peer, so
@@ -15,7 +15,7 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-TABLE = "parktech_netmap"
+TABLE = "relay_hub_netmap"
 
 
 def _run(cmd: list[str], dry_run: bool) -> None:

@@ -10,7 +10,7 @@ OVPN_PORT="${OVPN_PORT:-1194}"
 OVPN_PROTO="${OVPN_PROTO:-tcp}"
 OVPN_NETWORK="${OVPN_NETWORK:-10.100.1.0}"
 OVPN_NETMASK="${OVPN_NETMASK:-255.255.255.0}"
-OVPN_SERVER_CN="${OVPN_SERVER_CN:-parktech-relay}"
+OVPN_SERVER_CN="${OVPN_SERVER_CN:-relay-hub}"
 
 mkdir -p "$PKI_DIR" "$CCD_DIR" /vpn/clients /vpn/issued /vpn/private
 
@@ -18,7 +18,7 @@ init_pki() {
   echo "Initializing OpenVPN PKI with openssl..."
   openssl genrsa -out "$PKI_DIR/ca.key" 2048
   openssl req -x509 -new -nodes -key "$PKI_DIR/ca.key" -sha256 -days 3650 \
-    -out "$PKI_DIR/ca.crt" -subj "/CN=ParkTech Relay CA"
+    -out "$PKI_DIR/ca.crt" -subj "/CN=Relay Hub CA"
 
   openssl genrsa -out "$PKI_DIR/server.key" 2048
   openssl req -new -key "$PKI_DIR/server.key" -out "$PKI_DIR/server.csr" \

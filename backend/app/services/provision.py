@@ -31,7 +31,7 @@ def get_or_create_settings(db: Session) -> SettingsRow:
     cfg = get_settings()
     row = SettingsRow(
         id=1,
-        operator_name="ParkTech Operator",
+        operator_name="Relay Operator",
         public_ui_url=cfg.public_ui_url,
         headscale_url=cfg.headscale_url,
         wg_endpoint=cfg.wg_endpoint,
@@ -220,7 +220,7 @@ def wireguard_client_conf(db: Session, site: Site) -> str:
     if not site.wg_private_key or not site.wg_hub_public_key or not site.wg_tunnel_ip:
         raise ValueError("Site is not a WireGuard site with keys")
     if getattr(site, "access_mode", "gateway") == "direct":
-        # Device address is the ParkTech virtual IP; reach hub + engineer pool
+        # Device address is the Relay Hub virtual IP; reach hub + engineer pool
         # Omit DNS — mobile WG apps reject/mis-handle DNS with split AllowedIPs
         allowed = "10.100.0.0/22"
         include_dns = False

@@ -13,7 +13,7 @@ def bootstrap_headscale() -> None:
     """Create Headscale user + API key via CLI over the unix socket."""
     api_key_file = Path(os.environ.get("HEADSCALE_API_KEY_FILE", "/data/headscale-api.key"))
     sock = Path(os.environ.get("HEADSCALE_SOCKET", "/var/run/headscale/headscale.sock"))
-    user = os.environ.get("HEADSCALE_USER", "parktech")
+    user = os.environ.get("HEADSCALE_USER", "relay")
 
     logger.info("Waiting for Headscale socket at %s", sock)
     for _ in range(90):

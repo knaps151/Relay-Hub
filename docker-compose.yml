@@ -1,7 +1,7 @@
 services:
   headscale:
     image: headscale/headscale:0.25.1
-    container_name: parktech-headscale
+    container_name: relay-hub-headscale
     restart: unless-stopped
     command: serve
     volumes:
@@ -16,7 +16,7 @@ services:
 
   api:
     build: ./backend
-    container_name: parktech-api
+    container_name: relay-hub-api
     restart: unless-stopped
     depends_on:
       - headscale
@@ -36,7 +36,7 @@ services:
       HTTP_ONLY: ${HTTP_ONLY:-1}
       WG_DRY_RUN: ${WG_DRY_RUN:-1}
       NFT_DRY_RUN: ${NFT_DRY_RUN:-1}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-parktech}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-relay}
       PUBLIC_UI_URL: ${PUBLIC_UI_URL:-http://127.0.0.1:8000}
       HEADSCALE_URL: ${HEADSCALE_URL:-http://127.0.0.1:8080}
       WG_ENDPOINT: ${WG_ENDPOINT:-127.0.0.1:51820}
@@ -62,7 +62,7 @@ services:
 
   openvpn:
     build: ./openvpn
-    container_name: parktech-openvpn
+    container_name: relay-hub-openvpn
     restart: unless-stopped
     depends_on:
       - api
@@ -71,7 +71,7 @@ services:
       OVPN_PROTO: tcp
       OVPN_NETWORK: 10.100.1.0
       OVPN_NETMASK: 255.255.255.0
-      OVPN_SERVER_CN: parktech-relay
+      OVPN_SERVER_CN: relay-hub
     volumes:
       - openvpn-data:/vpn
     ports:
@@ -87,7 +87,7 @@ services:
 
   caddy:
     image: caddy:2.9-alpine
-    container_name: parktech-caddy
+    container_name: relay-hub-caddy
     profiles: ["caddy"]
     restart: unless-stopped
     depends_on:

@@ -13,7 +13,7 @@ class SettingsRow(Base):
     __tablename__ = "settings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
-    operator_name: Mapped[str] = mapped_column(String(200), default="ParkTech Operator")
+    operator_name: Mapped[str] = mapped_column(String(200), default="Relay Operator")
     domain: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     public_ui_url: Mapped[str] = mapped_column(String(500), default="http://127.0.0.1:8000")
     headscale_url: Mapped[str] = mapped_column(String(500), default="http://127.0.0.1:8080")

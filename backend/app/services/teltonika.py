@@ -98,36 +98,36 @@ uci set firewall.lan_to_wg.dest='wg'
 echo "Configuring 1:1 NETMAP ({virtual_subnet} <-> {local_subnet})..."
 
 # Remove existing netmap rules if present
-uci -q delete firewall.parktech_dnat 2>/dev/null || true
-uci -q delete firewall.parktech_snat 2>/dev/null || true
+uci -q delete firewall.relay_hub_dnat 2>/dev/null || true
+uci -q delete firewall.relay_hub_snat 2>/dev/null || true
 
 # DNAT: incoming to virtual subnet -> local subnet
-uci set firewall.parktech_dnat=redirect
-uci set firewall.parktech_dnat.name='ParkTech DNAT'
-uci set firewall.parktech_dnat.src='wg'
-uci set firewall.parktech_dnat.src_dip='{virtual_base}/24'
-uci set firewall.parktech_dnat.dest='lan'
-uci set firewall.parktech_dnat.dest_ip='{local_base}/24'
-uci set firewall.parktech_dnat.target='DNAT'
+uci set firewall.relay_hub_dnat=redirect
+uci set firewall.relay_hub_dnat.name='Relay Hub DNAT'
+uci set firewall.relay_hub_dnat.src='wg'
+uci set firewall.relay_hub_dnat.src_dip='{virtual_base}/24'
+uci set firewall.relay_hub_dnat.dest='lan'
+uci set firewall.relay_hub_dnat.dest_ip='{local_base}/24'
+uci set firewall.relay_hub_dnat.target='DNAT'
 
 # SNAT: outgoing from local subnet -> virtual subnet
-uci set firewall.parktech_snat=nat
-uci set firewall.parktech_snat.name='ParkTech SNAT'
-uci set firewall.parktech_snat.src='lan'
-uci set firewall.parktech_snat.src_ip='{local_base}/24'
-uci set firewall.parktech_snat.dest='wg'
-uci set firewall.parktech_snat.snat_ip='{virtual_base}'
-uci set firewall.parktech_snat.target='SNAT'
+uci set firewall.relay_hub_snat=nat
+uci set firewall.relay_hub_snat.name='Relay Hub SNAT'
+uci set firewall.relay_hub_snat.src='lan'
+uci set firewall.relay_hub_snat.src_ip='{local_base}/24'
+uci set firewall.relay_hub_snat.dest='wg'
+uci set firewall.relay_hub_snat.snat_ip='{virtual_base}'
+uci set firewall.relay_hub_snat.target='SNAT'
 
 # Alternative nftables-based NETMAP (for advanced setups)
 # Uncomment below and comment out the UCI redirect/nat rules above if UCI NAT doesn't work
 #
 # cat >> /etc/firewall.user << 'NETMAP_EOF'
-# # ParkTech 1:1 NETMAP
-# nft add table ip parktech_netmap 2>/dev/null || true
-# nft flush table ip parktech_netmap
+# # Relay Hub 1:1 NETMAP
+# nft add table ip relay_hub_netmap 2>/dev/null || true
+# nft flush table ip relay_hub_netmap
 # nft -f - << EOF
-# table ip parktech_netmap {{
+# table ip relay_hub_netmap {{
 #   chain prerouting {{
 #     type nat hook prerouting priority dstnat; policy accept;
 #     ip daddr {virtual_subnet} dnat ip prefix to ip daddr map {{ {virtual_subnet} : {local_subnet} }}

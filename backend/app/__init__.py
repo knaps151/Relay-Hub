@@ -1,1 +1,1 @@
-"""ParkTech Relay hub API."""
+"""Relay Hub hub API."""

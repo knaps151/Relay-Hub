@@ -72,7 +72,7 @@ class TestAPIAuth:
         client = TestClient(app, raise_server_exceptions=False)
 
         # Login first to get session cookie
-        client.post("/login", data={"password": "parktech"})
+        client.post("/login", data={"password": "relay"})
 
         # Now try API with session
         response = client.get("/api/sites")
@@ -86,7 +86,7 @@ class TestAPISites:
     def test_create_site_validates_vpn_type(self):
         """Creating a site with invalid VPN type should fail."""
         client = TestClient(app, raise_server_exceptions=False)
-        client.post("/login", data={"password": "parktech"})
+        client.post("/login", data={"password": "relay"})
 
         response = client.post(
             "/api/sites",
@@ -105,7 +105,7 @@ class TestAPIEngineers:
     def test_engineer_endpoints_exist(self):
         """Engineer API endpoints should be registered."""
         client = TestClient(app, raise_server_exceptions=False)
-        client.post("/login", data={"password": "parktech"})
+        client.post("/login", data={"password": "relay"})
 
         # List endpoint should respond (may be empty list or error, but not 404)
         response = client.get("/api/engineers")
@@ -131,7 +131,7 @@ class TestVirtualIPPreview:
     def test_preview_virtual_ip_calculates_correctly(self):
         """Preview should return correct virtual IP."""
         client = TestClient(app, raise_server_exceptions=False)
-        client.post("/login", data={"password": "parktech"})
+        client.post("/login", data={"password": "relay"})
 
         response = client.post(
             "/api/preview-virtual-ip",
@@ -147,7 +147,7 @@ class TestVirtualIPPreview:
     def test_preview_handles_different_host_numbers(self):
         """Preview should handle various host numbers."""
         client = TestClient(app, raise_server_exceptions=False)
-        client.post("/login", data={"password": "parktech"})
+        client.post("/login", data={"password": "relay"})
 
         # Test .1 (router)
         response = client.post(

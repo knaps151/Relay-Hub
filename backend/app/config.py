@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     database_url: str = "sqlite:////data/relay.db"
-    admin_password: str = "parktech"
+    admin_password: str = "relay"
     http_only: bool = True
     api_token: str = ""  # Optional bearer token for API access
 
@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     headscale_api_url: str = "http://headscale:8080"
     headscale_api_key_file: str = "/data/headscale-api.key"
     headscale_socket: str = "/var/run/headscale/headscale.sock"
-    headscale_user: str = "parktech"
+    headscale_user: str = "relay"
 
     wg_interface: str = "wg0"
     wg_listen_port: int = 51820

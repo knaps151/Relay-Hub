@@ -3,7 +3,7 @@
 ## Safe to publish
 - Application source, templates, Compose files, `.env.example`
 - Docs / GitHub Pages under `docs/`
-- Placeholder defaults (`ADMIN_PASSWORD=parktech` for local dry-run only)
+- Placeholder defaults (`ADMIN_PASSWORD=relay` for local dry-run only)
 
 ## Never commit
 - `.env` (real `ADMIN_PASSWORD`, `API_TOKEN`, endpoints)

@@ -1,4 +1,4 @@
-"""JSON API endpoints for ParkTech Relay."""
+"""JSON API endpoints for Relay Hub."""
 
 from __future__ import annotations
 

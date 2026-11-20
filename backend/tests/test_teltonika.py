@@ -118,7 +118,7 @@ class TestTeltonikaEndpoint:
         client = TestClient(app, raise_server_exceptions=False)
 
         # Login first
-        client.post("/login", data={"password": "parktech"})
+        client.post("/login", data={"password": "relay"})
 
         response = client.get("/sites/99999/teltonika.txt")
         # Either 404 (site not found) or 500 (database not initialized in test) is acceptable

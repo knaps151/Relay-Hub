@@ -11,7 +11,7 @@ class TestSecurityWarning:
         """Warning should appear when default password is used in production mode."""
         with patch("app.main.get_settings") as mock_settings:
             mock_settings.return_value = Settings(
-                admin_password="parktech",
+                admin_password="relay",
                 http_only=False,  # Production mode
             )
             from app.main import _is_insecure_config, _security_warning
@@ -19,7 +19,7 @@ class TestSecurityWarning:
             assert _is_insecure_config() is True
             warning = _security_warning()
             assert warning is not None
-            assert "default password" in warning.lower() or "parktech" in warning
+            assert "default password" in warning.lower() or "relay" in warning
 
     def test_secure_config_custom_password(self):
         """No warning when custom password is used."""
@@ -37,7 +37,7 @@ class TestSecurityWarning:
         """No warning in HTTP_ONLY mode even with default password."""
         with patch("app.main.get_settings") as mock_settings:
             mock_settings.return_value = Settings(
-                admin_password="parktech",
+                admin_password="relay",
                 http_only=True,  # Development mode
             )
             from app.main import _is_insecure_config, _security_warning

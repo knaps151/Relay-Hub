@@ -1,8 +1,8 @@
-# ParkTech Relay (POC)
+# Relay Hub (POC)
 
 Self-hosted multi-VPN hub for parking / CPO fleets.
 
-**Project page:** [GitHub Pages](https://knaps151.github.io/ParkTech-Relay/) · **Source:** this repository
+**Project page:** [GitHub Pages](https://knaps151.github.io/Relay-Hub/) · **Source:** this repository
 
 > Do not commit `.env`, SQLite under `data/`, PKI/`vpn/`, or real WireGuard private keys. Only `.env.example` (placeholder defaults) belongs in git.
 
@@ -27,7 +27,7 @@ docker compose up -d --build
 Wait ~30s for Headscale bootstrap + OpenVPN PKI, then open:
 
 - Dashboard: http://127.0.0.1:8000  
-- Password: `parktech` (from `.env` `ADMIN_PASSWORD`)
+- Password: `relay` (from `.env` `ADMIN_PASSWORD`)
 - Headscale: http://127.0.0.1:8080
 
 First login walks through settings (UI URL, Headscale URL, WG/OpenVPN endpoints, base CIDR).

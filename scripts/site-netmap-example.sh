@@ -13,7 +13,7 @@ set -euo pipefail
 
 VIRTUAL_CIDR="${1:-10.101.0.0/24}"
 LOCAL_CIDR="${2:-192.168.1.0/24}"
-TABLE_NAME="parktech_netmap"
+TABLE_NAME="relay_hub_netmap"
 
 if [[ "$(id -u)" -ne 0 ]]; then
   echo "Run as root (nftables + sysctl)"
