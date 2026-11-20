@@ -407,6 +407,100 @@ def api_delete_engineer(
     return None
 
 
+# --- Access Events & Sessions Endpoints ---
+
+
+class AccessEventResponse(BaseModel):
+    id: int
+    timestamp: str
+    actor_type: str
+    actor_name: str
+    site_id: Optional[int]
+    device_id: Optional[int]
+    kind: str
+    source_ip: Optional[str]
+    detail: Optional[str]
+
+
+class LiveSessionResponse(BaseModel):
+    actor_type: str
+    actor_id: int
+    actor_name: str
+    vpn_type: str
+    endpoint: Optional[str]
+    last_handshake: Optional[str]
+    transfer_rx: int
+    transfer_tx: int
+    site_id: Optional[int]
+
+
+@router.get("/access-events", response_model=list[AccessEventResponse])
+def api_list_access_events(
+    request: Request,
+    db: Session = Depends(get_db),
+    _auth: None = Depends(require_api_auth),
+    site_id: Optional[int] = None,
+    engineer_id: Optional[int] = None,
+    kind: Optional[str] = None,
+    days: int = 7,
+    limit: int = 500,
+):
+    """List recent access events."""
+    from datetime import datetime, timedelta
+
+    from app.services.audit import get_recent_events
+
+    since = datetime.utcnow() - timedelta(days=days)
+    events = get_recent_events(
+        db,
+        site_id=site_id,
+        engineer_id=engineer_id,
+        kind=kind,
+        since=since,
+        limit=min(limit, 1000),
+    )
+    return [
+        AccessEventResponse(
+            id=e.id,
+            timestamp=e.timestamp.isoformat() if e.timestamp else "",
+            actor_type=e.actor_type,
+            actor_name=e.actor_name,
+            site_id=e.site_id,
+            device_id=e.device_id,
+            kind=e.kind,
+            source_ip=e.source_ip,
+            detail=e.detail,
+        )
+        for e in events
+    ]
+
+
+@router.get("/sessions", response_model=list[LiveSessionResponse])
+def api_list_sessions(
+    request: Request,
+    db: Session = Depends(get_db),
+    _auth: None = Depends(require_api_auth),
+):
+    """List currently connected sessions (engineers and sites)."""
+    from app.services.sessions import get_live_sessions
+
+    sessions = get_live_sessions(db)
+    return [
+        LiveSessionResponse(
+            actor_type=s.actor_type,
+            actor_id=s.actor_id,
+            actor_name=s.actor_name,
+            vpn_type=s.vpn_type,
+            endpoint=s.endpoint,
+            last_handshake=s.last_handshake.isoformat() if s.last_handshake else None,
+            transfer_rx=s.transfer_rx,
+            transfer_tx=s.transfer_tx,
+            site_id=s.site_id,
+        )
+        for s in sessions
+    ]
+
+
 # --- Utility Endpoints ---
 
 

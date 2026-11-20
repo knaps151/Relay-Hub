@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     default_local_subnet: str = "192.168.1.0/24"
     poll_interval_seconds: int = 15
     sync_interval_seconds: int = 2
+    access_log_retention_days: int = 90
 
 
 @lru_cache
