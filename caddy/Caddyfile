@@ -3,10 +3,10 @@
 
 	handle /headscale* {
 		uri strip_prefix /headscale
-		reverse_proxy headscale:8080
+		reverse_proxy 127.0.0.1:8080
 	}
 
 	handle {
-		reverse_proxy api:8000
+		reverse_proxy 127.0.0.1:8000
 	}
 }

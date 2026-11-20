@@ -97,20 +97,34 @@ def public_key_from_private(private_key_b64: str) -> str:
 
 
 def ensure_hub_interface(private_key: str) -> None:
+    """Bring up wg0 without wiping peers.
+
+    Important: do NOT use `wg setconf` with an interface-only file here — that
+    removes every peer on each poll (~15s) and clears live handshakes.
+    """
     settings = get_settings()
     dry = settings.wg_dry_run
     iface = settings.wg_interface
 
     _run(["ip", "link", "add", "dev", iface, "type", "wireguard"], dry_run=dry)
-    conf = f"""[Interface]
-PrivateKey = {private_key}
-ListenPort = {settings.wg_listen_port}
-"""
-    conf_path = Path(f"/tmp/{iface}.conf")
-    conf_path.write_text(conf, encoding="utf-8")
-    result = _run(["wg", "setconf", iface, str(conf_path)], dry_run=dry)
+    key_path = Path(f"/tmp/{iface}.priv")
+    if not dry:
+        key_path.write_text(private_key + "\n", encoding="utf-8")
+        key_path.chmod(0o600)
+    result = _run(
+        [
+            "wg",
+            "set",
+            iface,
+            "private-key",
+            str(key_path),
+            "listen-port",
+            str(settings.wg_listen_port),
+        ],
+        dry_run=dry,
+    )
     if result.returncode != 0 and not dry:
-        logger.warning("wg setconf failed: %s", result.stderr)
+        logger.warning("wg set listen-port/private-key failed: %s", result.stderr)
     _run(["ip", "address", "replace", settings.wg_hub_address, "dev", iface], dry_run=dry)
     _run(["ip", "link", "set", "up", "dev", iface], dry_run=dry)
 
