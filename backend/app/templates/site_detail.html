@@ -76,16 +76,43 @@
         {% elif site.vpn_type == 'wireguard' %}
         <p class="mono mb-1">Tunnel: {{ site.wg_tunnel_ip }}</p>
         <p class="text-secondary small mb-3">Endpoint: <span class="mono">{{ settings.wg_endpoint }}</span></p>
-        <div class="d-flex flex-wrap gap-2">
+        <div class="d-flex flex-wrap gap-2 mb-3">
           <a class="btn btn-primary btn-sm" href="/sites/{{ site.id }}/wireguard.conf">Download .conf</a>
+          <form method="post" action="/sites/{{ site.id }}/temp-download" class="m-0">
+            <input type="hidden" name="kind" value="wireguard">
+            <button class="btn btn-outline-primary btn-sm" type="submit">3‑min cloud install link</button>
+          </form>
           {% if site.access_mode != 'direct' %}
           <a class="btn btn-outline-primary btn-sm" href="/sites/{{ site.id }}/teltonika.txt">Teltonika UCI script</a>
           {% endif %}
         </div>
+        {% if temp_install_cmd %}
+        <div class="alert alert-info mb-0">
+          <div class="fw-semibold mb-1">Valid for {{ temp_ttl_minutes }} minutes — run on the Linux host:</div>
+          <pre class="bg-white border rounded p-2 mono small mb-2" id="temp-install-cmd">{{ temp_install_cmd }}</pre>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyText(document.getElementById('temp-install-cmd').innerText, 'install command')">Copy command</button>
+          {% if temp_conf_url %}
+          <div class="text-secondary small mt-2 mb-0">Raw conf: <span class="mono">{{ temp_conf_url }}</span></div>
+          {% endif %}
+        </div>
+        {% endif %}
         {% else %}
         <p class="mono mb-1">CN: {{ site.ovpn_common_name }} · {{ site.ovpn_client_ip }}</p>
         <p class="text-secondary small mb-3">Endpoint: <span class="mono">{{ settings.openvpn_endpoint }}</span></p>
-        <a class="btn btn-primary btn-sm" href="/sites/{{ site.id }}/client.ovpn">Download .ovpn</a>
+        <div class="d-flex flex-wrap gap-2">
+          <a class="btn btn-primary btn-sm" href="/sites/{{ site.id }}/client.ovpn">Download .ovpn</a>
+          <form method="post" action="/sites/{{ site.id }}/temp-download" class="m-0">
+            <input type="hidden" name="kind" value="openvpn">
+            <button class="btn btn-outline-primary btn-sm" type="submit">3‑min download link</button>
+          </form>
+        </div>
+        {% if temp_conf_url and site.vpn_type == 'openvpn' %}
+        <div class="alert alert-info mt-3 mb-0">
+          <div class="fw-semibold mb-1">Valid for {{ temp_ttl_minutes }} minutes:</div>
+          <pre class="bg-white border rounded p-2 mono small mb-2" id="temp-conf-url">{{ temp_conf_url }}</pre>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyText(document.getElementById('temp-conf-url').innerText, 'download URL')">Copy URL</button>
+        </div>
+        {% endif %}
         {% endif %}
       </div>
       <div class="col-lg-4">

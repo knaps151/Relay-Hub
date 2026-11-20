@@ -91,6 +91,19 @@ class HubState(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class TempDownloadToken(Base):
+    """Short-lived unauthenticated download link for site VPN configs."""
+
+    __tablename__ = "temp_download_tokens"
+
+    token: Mapped[str] = mapped_column(String(64), primary_key=True)
+    site_id: Mapped[int] = mapped_column(ForeignKey("sites.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(32))  # wireguard | openvpn | teltonika
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    download_count: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class CatalogueRegion(Base):
     """Admin-managed region list for sites / filters."""
 

@@ -542,6 +542,9 @@ def site_detail(
             "regions": _all_regions(db),
             "edit_notice": request.query_params.get("notice") or None,
             "edit_error": request.query_params.get("error") or None,
+            "temp_install_cmd": request.query_params.get("temp_install") or None,
+            "temp_conf_url": request.query_params.get("temp_url") or None,
+            "temp_ttl_minutes": 3,
         },
     )
 
@@ -775,6 +778,123 @@ def download_wg(request: Request, site_id: int, db: Session = Depends(get_db)):
             "Content-Disposition": f'attachment; filename="{site.site_code}.conf"',
             "Content-Type": "application/x-wireguard-profile; charset=utf-8",
         },
+    )
+
+
+@app.post("/sites/{site_id}/temp-download")
+def site_temp_download(
+    request: Request,
+    site_id: int,
+    db: Session = Depends(get_db),
+    kind: str = Form("wireguard"),
+):
+    """Mint a 3-minute public link for curl/install on a remote host."""
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    site = db.get(Site, site_id)
+    if not site:
+        raise HTTPException(404)
+    from app.services.temp_download import (
+        DEFAULT_TTL_SECONDS,
+        linux_install_one_liner,
+        mint_temp_download,
+        public_conf_url,
+    )
+
+    try:
+        row = mint_temp_download(db, site, kind=kind, ttl_seconds=DEFAULT_TTL_SECONDS)
+    except ValueError as exc:
+        return RedirectResponse(
+            f"/sites/{site_id}?error={quote(str(exc))}#credentials",
+            status_code=303,
+        )
+    base = get_or_create_settings(db).public_ui_url or get_settings().public_ui_url
+    conf_url = public_conf_url(base, row.token)
+    if kind == "wireguard":
+        install_cmd = linux_install_one_liner(base, row.token)
+        return RedirectResponse(
+            f"/sites/{site_id}?notice={quote('Link valid for 3 minutes')}"
+            f"&temp_url={quote(conf_url)}&temp_install={quote(install_cmd)}#credentials",
+            status_code=303,
+        )
+    return RedirectResponse(
+        f"/sites/{site_id}?notice={quote('Link valid for 3 minutes')}"
+        f"&temp_url={quote(conf_url)}#credentials",
+        status_code=303,
+    )
+
+
+@app.get("/d/{token}")
+def temp_download_file(token: str, request: Request, db: Session = Depends(get_db)):
+    """Unauthenticated short-lived config download."""
+    from app.services.audit import record_config_download
+    from app.services.temp_download import get_valid_token, touch_download
+
+    row = get_valid_token(db, token)
+    if not row:
+        raise HTTPException(410, "Link expired or invalid")
+    site = db.get(Site, row.site_id)
+    if not site:
+        raise HTTPException(404)
+    touch_download(db, row)
+    source_ip = request.client.host if request.client else None
+    if row.kind == "wireguard":
+        conf = wireguard_client_conf(db, site)
+        record_config_download(db, site=site, config_type="wireguard.conf", source_ip=source_ip)
+        return PlainTextResponse(
+            conf,
+            media_type="application/x-wireguard-profile",
+            headers={
+                "Content-Disposition": f'attachment; filename="{site.site_code}.conf"',
+                "Cache-Control": "no-store",
+            },
+        )
+    if row.kind == "openvpn":
+        conf = openvpn_client_conf(site)
+        record_config_download(db, site=site, config_type="client.ovpn", source_ip=source_ip)
+        return PlainTextResponse(
+            conf,
+            media_type="application/x-openvpn-profile",
+            headers={
+                "Content-Disposition": f'attachment; filename="{site.site_code}.ovpn"',
+                "Cache-Control": "no-store",
+            },
+        )
+    if row.kind == "teltonika":
+        script = teltonika_uci_script(db, site)
+        record_config_download(db, site=site, config_type="teltonika.txt", source_ip=source_ip)
+        return PlainTextResponse(
+            script,
+            media_type="text/plain",
+            headers={
+                "Content-Disposition": f'attachment; filename="{site.site_code}-teltonika.txt"',
+                "Cache-Control": "no-store",
+            },
+        )
+    raise HTTPException(404)
+
+
+@app.get("/d/{token}/install.sh")
+def temp_download_install_sh(token: str, request: Request, db: Session = Depends(get_db)):
+    """3-minute WireGuard install script for Linux (curl | sudo bash)."""
+    from app.services.audit import record_config_download
+    from app.services.temp_download import get_valid_token, render_wireguard_install_script, touch_download
+
+    row = get_valid_token(db, token)
+    if not row or row.kind != "wireguard":
+        raise HTTPException(410, "Link expired or invalid")
+    site = db.get(Site, row.site_id)
+    if not site or site.vpn_type != "wireguard":
+        raise HTTPException(404)
+    touch_download(db, row)
+    conf = wireguard_client_conf(db, site)
+    source_ip = request.client.host if request.client else None
+    record_config_download(db, site=site, config_type="wireguard-install.sh", source_ip=source_ip)
+    script = render_wireguard_install_script(conf)
+    return PlainTextResponse(
+        script,
+        media_type="text/x-shellscript",
+        headers={"Cache-Control": "no-store"},
     )
 
 

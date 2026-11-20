@@ -118,6 +118,8 @@ The JSON API is available at `/api/*` endpoints. Authentication is required via 
 - `DELETE /api/sites/{site_id}/devices/{device_id}` — Delete a device
 - `POST /api/sites/{id}/scan-lan` — Hub ICMP sweep of the site virtual subnet; auto-adds new hosts (gateway site + online tunnel)
 
+**Short-lived install links (UI):** on a WireGuard site, **3‑min cloud install link** mints an unauthenticated URL valid for 3 minutes. On the host run the shown `curl … | sudo bash` (installs WireGuard + enables `wg-quick@wg0`). Raw conf: `GET /d/{token}`.
+
 **Engineers:**
 - `GET /api/engineers` — List all engineers
 - `POST /api/engineers` — Create an engineer (body: `{"name": "John Smith"}`)
