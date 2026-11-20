@@ -62,11 +62,11 @@ class TestScanGuards:
         with pytest.raises(ValueError, match="gateway"):
             scan_and_add_devices(db_session, site)
 
-    def test_refuses_non_wireguard(self, db_session):
+    def test_allows_openvpn_gateway(self, db_session):
         site = Site(
-            name="TS Site",
-            site_code="ts-site",
-            vpn_type="tailscale",
+            name="OVPN Site",
+            site_code="ovpn-site",
+            vpn_type="openvpn",
             access_mode="gateway",
             site_index=9,
             virtual_subnet="10.101.9.0/24",
@@ -75,8 +75,17 @@ class TestScanGuards:
         )
         db_session.add(site)
         db_session.commit()
-        with pytest.raises(ValueError, match="WireGuard"):
-            scan_and_add_devices(db_session, site)
+
+        def fake_ping(ip: str) -> bool:
+            return ip == "10.101.9.50"
+
+        with patch("app.services.lan_scan.enrich_hosts", side_effect=_noop_enrich):
+            with patch("app.services.lan_scan._ping_host", side_effect=fake_ping):
+                result = scan_and_add_devices(db_session, site)
+
+        assert result.responsive == 1
+        assert len(result.added) == 1
+        assert result.added[0].local_ip == "192.168.1.50"
 
 
 def _noop_enrich(items, **_kwargs):

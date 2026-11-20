@@ -315,7 +315,7 @@ def api_scan_lan(
     db: Session = Depends(get_db),
     _auth: None = Depends(require_api_auth),
 ):
-    """Ping-sweep a gateway WireGuard site's virtual subnet and auto-add new hosts."""
+    """Ping-sweep a gateway site's virtual subnet and auto-add new hosts."""
     from app.services.lan_scan import scan_and_add_devices
 
     site = db.get(Site, site_id)

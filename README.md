@@ -82,11 +82,11 @@ VPS overlay (`docker-compose.vps.yml`) runs API + Caddy on host networking so Wi
 
 ### Hub LAN auto-scan (gateway WireGuard)
 
-When a gateway WireGuard site shows **Online**, the site detail page has **Scan LAN**. The hub ping-sweeps that site’s `10.101.X.0/24` virtual subnet through the live tunnel/NETMAP path and auto-adds responsive hosts that are not already on the cheat sheet. New rows are enriched with reverse DNS (when available) and a light TCP port probe to set a better **label**, **device type**, and **admin port** (e.g. RTSP → camera). Re-scan is additive only — no duplicates, nothing removed for hosts that did not reply. MAC/ARP is not used on the hub path (tunnel next-hop only).
+When a **gateway** site (WireGuard, OpenVPN, or Tailscale) shows **Online**, the site detail page has **Scan LAN**. The hub ping-sweeps that site’s `10.101.X.0/24` virtual subnet through the live tunnel path and auto-adds responsive hosts that are not already on the cheat sheet. New rows are enriched with reverse DNS (when available) and a light TCP port probe to set a better **label**, **device type**, and **admin port** (e.g. RTSP → camera). Re-scan is additive only — no duplicates, nothing removed for hosts that did not reply. Direct-device sites are skipped (no LAN). MAC/ARP is not used on the hub path (tunnel next-hop only).
 
-**Verify on DigitalOcean / Linux VPS** (`WG_DRY_RUN=0`, host networking):
+**Verify on DigitalOcean / Linux VPS** (real tunnels, host networking):
 
-1. Connect a gateway site router so the fleet row is Online (recent WG handshake).
+1. Connect a gateway site router so the fleet row is Online.
 2. Open the site → **Scan LAN** (or `POST /api/sites/{id}/scan-lan`).
 3. Confirm new cheat-sheet rows for live LAN hosts; run Scan again and confirm no duplicates.
 
@@ -116,7 +116,7 @@ The JSON API is available at `/api/*` endpoints. Authentication is required via 
 - `GET /api/sites/{id}/devices` — List devices for a site
 - `POST /api/sites/{id}/devices` — Add a device (body: `{"label": "...", "local_ip": "192.168.1.50"}`)
 - `DELETE /api/sites/{site_id}/devices/{device_id}` — Delete a device
-- `POST /api/sites/{id}/scan-lan` — Hub ICMP sweep of the site virtual subnet; auto-adds new hosts (gateway WireGuard + online tunnel only)
+- `POST /api/sites/{id}/scan-lan` — Hub ICMP sweep of the site virtual subnet; auto-adds new hosts (gateway site + online tunnel)
 
 **Engineers:**
 - `GET /api/engineers` — List all engineers

@@ -31,14 +31,14 @@ class ScanResult:
     responsive: int = 0
 
 
-def _site_wireguard_online(site: Site) -> bool:
-    if not site.wg_public_key:
-        return False
-    handshakes = {p.public_key: p for p in parse_handshakes()}
-    peer = handshakes.get(site.wg_public_key)
-    if peer and handshake_is_online(peer.latest_handshake):
-        return True
-    # Fall back to last polled flag (useful in tests / dry-run)
+def _site_tunnel_online(site: Site) -> bool:
+    """True when the site VPN path looks live (handshake / poll flag)."""
+    if site.vpn_type == "wireguard" and site.wg_public_key:
+        handshakes = {p.public_key: p for p in parse_handshakes()}
+        peer = handshakes.get(site.wg_public_key)
+        if peer and handshake_is_online(peer.latest_handshake):
+            return True
+    # OpenVPN / Tailscale (and WG dry-run): use last polled online flag
     return bool(site.online)
 
 
@@ -75,11 +75,11 @@ def scan_and_add_devices(db: Session, site: Site) -> ScanResult:
     Enrichment (reverse DNS + light TCP ports) shapes label / type / admin_port.
     Additive only — never deletes devices that did not reply.
     """
-    if site.vpn_type != "wireguard":
-        raise ValueError("LAN scan is only available for WireGuard gateway sites")
+    if site.vpn_type not in {"wireguard", "openvpn", "tailscale"}:
+        raise ValueError("LAN scan requires a WireGuard, OpenVPN, or Tailscale site")
     if getattr(site, "access_mode", "gateway") != "gateway":
         raise ValueError("LAN scan is only available for gateway sites (not direct devices)")
-    if not _site_wireguard_online(site):
+    if not _site_tunnel_online(site):
         raise ValueError("Site tunnel is offline — connect the site router before scanning")
 
     loaded = db.scalar(
