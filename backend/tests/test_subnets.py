@@ -9,6 +9,7 @@ from app.models import Site
 from app.services.subnets import (
     MAX_SITE_INDEX,
     allocate_virtual_subnet,
+    local_ip_for_virtual,
     next_site_index,
     parse_base_cidr,
     virtual_ip_for_local,
@@ -158,3 +159,16 @@ class TestVirtualIpForLocal:
             local_subnet="192.168.1.0/24",
         )
         assert result == "10.101.5.1"
+
+    def test_reverse_mapping(self):
+        local = local_ip_for_virtual(
+            virtual_subnet="10.101.5.0/24",
+            virtual_ip="10.101.5.100",
+            local_subnet="192.168.1.0/24",
+        )
+        assert local == "192.168.1.100"
+
+    def test_round_trip(self):
+        vip = virtual_ip_for_local("10.101.2.0/24", "10.0.0.50", "10.0.0.0/24")
+        assert vip == "10.101.2.50"
+        assert local_ip_for_virtual("10.101.2.0/24", vip, "10.0.0.0/24") == "10.0.0.50"

@@ -62,6 +62,20 @@ def virtual_ip_for_local(virtual_subnet: str, local_ip: str, local_subnet: str) 
     return str(vip)
 
 
+def local_ip_for_virtual(virtual_subnet: str, virtual_ip: str, local_subnet: str) -> str:
+    """Inverse of virtual_ip_for_local: map virtual host onto local_subnet (1:1)."""
+    vnet = ipaddress.ip_network(virtual_subnet, strict=False)
+    lnet = ipaddress.ip_network(local_subnet, strict=False)
+    vip = ipaddress.ip_address(virtual_ip)
+    if vip not in vnet:
+        raise ValueError("Virtual IP is not in virtual_subnet")
+    host = int(vip) - int(vnet.network_address)
+    lip = lnet.network_address + host
+    if lip not in lnet:
+        raise ValueError("Host offset out of range for local subnet")
+    return str(lip)
+
+
 def default_gateway_virtual_ip(virtual_subnet: str) -> str:
     vnet = ipaddress.ip_network(virtual_subnet, strict=False)
     return str(vnet.network_address + 1)

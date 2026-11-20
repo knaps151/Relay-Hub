@@ -474,7 +474,15 @@ def site_new(
 
 
 @app.get("/sites/{site_id}", response_class=HTMLResponse)
-def site_detail(request: Request, site_id: int, db: Session = Depends(get_db)):
+def site_detail(
+    request: Request,
+    site_id: int,
+    db: Session = Depends(get_db),
+    scan_added: Optional[int] = Query(None),
+    scan_skipped: Optional[int] = Query(None),
+    scan_responsive: Optional[int] = Query(None),
+    scan_error: str = Query(""),
+):
     if not _authed(request):
         return RedirectResponse("/login", status_code=303)
     site = db.scalar(
@@ -523,6 +531,10 @@ def site_detail(request: Request, site_id: int, db: Session = Depends(get_db)):
             "security_warning": _security_warning(),
             "recent_events": recent_events,
             "presets": presets,
+            "scan_added": scan_added,
+            "scan_skipped": scan_skipped,
+            "scan_responsive": scan_responsive,
+            "scan_error": scan_error or None,
         },
     )
 
@@ -615,6 +627,30 @@ def site_ping_device(
     if result.returncode == 0:
         return _toast(response, f"Ping OK - {target}", ok=True)
     return _toast(response, f"Ping failed - {target}", ok=False)
+
+
+@app.post("/sites/{site_id}/scan-lan")
+def site_scan_lan(request: Request, site_id: int, db: Session = Depends(get_db)):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    site = db.get(Site, site_id)
+    if not site:
+        raise HTTPException(404)
+    from app.services.lan_scan import scan_and_add_devices
+
+    try:
+        result = scan_and_add_devices(db, site)
+    except ValueError as exc:
+        return RedirectResponse(
+            f"/sites/{site_id}?scan_error={quote(str(exc))}#cheat-sheet",
+            status_code=303,
+        )
+    return RedirectResponse(
+        f"/sites/{site_id}?scan_added={len(result.added)}"
+        f"&scan_skipped={result.skipped_existing}"
+        f"&scan_responsive={result.responsive}#cheat-sheet",
+        status_code=303,
+    )
 
 
 @app.post("/sites/{site_id}/delete")

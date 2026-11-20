@@ -300,6 +300,50 @@ def api_delete_device(
     return None
 
 
+class ScanLanResponse(BaseModel):
+    probed: int
+    responsive: int
+    added: int
+    skipped_existing: int
+    devices: list[DeviceResponse]
+
+
+@router.post("/sites/{site_id}/scan-lan", response_model=ScanLanResponse)
+def api_scan_lan(
+    request: Request,
+    site_id: int,
+    db: Session = Depends(get_db),
+    _auth: None = Depends(require_api_auth),
+):
+    """Ping-sweep a gateway WireGuard site's virtual subnet and auto-add new hosts."""
+    from app.services.lan_scan import scan_and_add_devices
+
+    site = db.get(Site, site_id)
+    if not site:
+        raise HTTPException(404, "Site not found")
+    try:
+        result = scan_and_add_devices(db, site)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return ScanLanResponse(
+        probed=result.probed,
+        responsive=result.responsive,
+        added=len(result.added),
+        skipped_existing=result.skipped_existing,
+        devices=[
+            DeviceResponse(
+                id=d.id,
+                label=d.label,
+                device_type=d.device_type,
+                local_ip=d.local_ip,
+                virtual_ip=d.virtual_ip,
+                admin_port=d.admin_port,
+            )
+            for d in result.added
+        ],
+    )
+
+
 # --- Engineer Endpoints ---
 
 

@@ -22,6 +22,15 @@
 <div class="alert alert-warning">{{ site.notes }}</div>
 {% endif %}
 
+{% if scan_error %}
+<div class="alert alert-danger">LAN scan failed: {{ scan_error }}</div>
+{% elif scan_added is not none %}
+<div class="alert alert-success">
+  LAN scan complete — added {{ scan_added }} device{% if scan_added != 1 %}s{% endif %}
+  {% if scan_responsive is not none %}(responsive: {{ scan_responsive }}{% if scan_skipped is not none %}, already listed: {{ scan_skipped }}{% endif %}){% endif %}.
+</div>
+{% endif %}
+
 {% if site.access_mode == 'direct' and site.vpn_type == 'wireguard' %}
 <div class="card mb-3 border-success">
   <div class="card-header fw-semibold text-success">Install on device</div>
@@ -36,13 +45,30 @@
 <div class="card mb-3" id="cheat-sheet">
   <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
     <span class="fw-semibold">{% if site.access_mode == 'direct' %}Device reachability{% else %}Device IP cheat sheet{% endif %}</span>
-    <span class="text-secondary small">
-      {% if site.access_mode == 'direct' %}
-      Virtual IP in {{ site.virtual_subnet }}
-      {% else %}
-      Local {{ site.local_subnet }} → virtual {{ site.virtual_subnet }}
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <span class="text-secondary small">
+        {% if site.access_mode == 'direct' %}
+        Virtual IP in {{ site.virtual_subnet }}
+        {% else %}
+        Local {{ site.local_subnet }} → virtual {{ site.virtual_subnet }}
+        {% endif %}
+      </span>
+      {% if site.access_mode == 'gateway' and site.vpn_type == 'wireguard' %}
+        {% if site.online %}
+        <form method="post" action="/sites/{{ site.id }}/scan-lan" class="m-0">
+          <button class="btn btn-sm btn-outline-primary" type="submit"
+                  onclick="this.disabled=true; this.textContent='Scanning…'; this.form.submit();">
+            Scan LAN
+          </button>
+        </form>
+        {% else %}
+        <button class="btn btn-sm btn-outline-secondary" type="button" disabled title="Connect the site router first">
+          Scan LAN
+        </button>
+        <span class="text-secondary small">Online tunnel required</span>
+        {% endif %}
       {% endif %}
-    </span>
+    </div>
   </div>
   <div class="card-body p-0">
     <div class="table-responsive">

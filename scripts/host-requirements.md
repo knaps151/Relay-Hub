@@ -27,3 +27,9 @@
 - Shares PKI volume with the API (`/vpn`)
 - API issues client certs into that volume; OpenVPN serves TCP 1194
 - Status file: `/vpn/openvpn-status.log`
+
+## LAN auto-scan
+
+- Requires a **live** gateway WireGuard tunnel from the hub (`WG_DRY_RUN=0` on Linux VPS)
+- Hub must be able to ICMP the site virtual subnet (`10.101.X.0/24`) via NETMAP/WG
+- Dry-run Mac builds will not discover real site hosts; verify Scan LAN on the VPS after the site is Online
