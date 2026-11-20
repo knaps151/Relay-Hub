@@ -8,111 +8,143 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.config import get_settings
-from app.models import Engineer, Site
+from app.models import Engineer, EngineerDevice, Site
 from app.services import openvpn, wireguard
-from app.services.headscale import HeadscaleClient
 
 logger = logging.getLogger(__name__)
 
-# In-memory state for tracking connection transitions
-_last_online_state: dict[str, bool] = {}  # key -> was_online
+_last_online_state: dict[str, bool] = {}
 
 
 @dataclass
 class LiveSession:
-    """A currently connected session."""
     actor_type: str  # engineer | site
     actor_id: int
     actor_name: str
-    vpn_type: str  # wireguard | openvpn | tailscale
+    vpn_type: str
     endpoint: Optional[str]
     last_handshake: Optional[datetime]
     transfer_rx: int = 0
     transfer_tx: int = 0
     site_id: Optional[int] = None
-    access_mode: str = "gateway"  # gateway | direct (sites only)
+    access_mode: str = "gateway"
+    device_label: Optional[str] = None
+    device_type_name: Optional[str] = None
+    engineer_device_id: Optional[int] = None
 
 
 def get_live_sessions(db: Session) -> list[LiveSession]:
-    """Get all currently connected sessions (engineers and sites)."""
     sessions: list[LiveSession] = []
-    cfg = get_settings()
-
-    # Get WireGuard handshakes
     handshakes = {p.public_key: p for p in wireguard.parse_handshakes()}
 
-    # Engineer sessions (WireGuard)
-    engineers = db.scalars(select(Engineer).where(Engineer.enabled == True)).all()
-    for eng in engineers:
-        peer = handshakes.get(eng.wg_public_key)
+    devices = db.scalars(
+        select(EngineerDevice)
+        .options(
+            selectinload(EngineerDevice.engineer),
+            selectinload(EngineerDevice.tech_device_type),
+        )
+        .join(Engineer)
+        .where(Engineer.enabled == True, EngineerDevice.enabled == True)  # noqa: E712
+    ).all()
+
+    for device in devices:
+        peer = handshakes.get(device.wg_public_key)
         if peer and wireguard.handshake_is_online(peer.latest_handshake):
-            sessions.append(LiveSession(
-                actor_type="engineer",
-                actor_id=eng.id,
-                actor_name=eng.name,
-                vpn_type="wireguard",
-                endpoint=peer.endpoint,
-                last_handshake=peer.latest_handshake,
-                transfer_rx=peer.transfer_rx,
-                transfer_tx=peer.transfer_tx,
-            ))
-
-    # Site sessions
-    sites = db.scalars(select(Site)).all()
-
-    for site in sites:
-        if site.vpn_type == "wireguard":
-            peer = handshakes.get(site.wg_public_key)
-            if peer and wireguard.handshake_is_online(peer.latest_handshake):
-                sessions.append(LiveSession(
-                    actor_type="site",
-                    actor_id=site.id,
-                    actor_name=site.name,
+            eng = device.engineer
+            type_name = device.tech_device_type.name if device.tech_device_type else None
+            display = f"{eng.name} · {device.label}" if eng else device.label
+            sessions.append(
+                LiveSession(
+                    actor_type="engineer",
+                    actor_id=eng.id if eng else device.id,
+                    actor_name=display,
                     vpn_type="wireguard",
                     endpoint=peer.endpoint,
                     last_handshake=peer.latest_handshake,
                     transfer_rx=peer.transfer_rx,
                     transfer_tx=peer.transfer_tx,
-                    site_id=site.id,
-                    access_mode=getattr(site, "access_mode", "gateway") or "gateway",
-                ))
+                    device_label=device.label,
+                    device_type_name=type_name,
+                    engineer_device_id=device.id,
+                )
+            )
+
+    # Legacy engineer peers (pre-migration) still on hub
+    for eng in db.scalars(select(Engineer).where(Engineer.enabled == True)).all():  # noqa: E712
+        if not eng.wg_public_key:
+            continue
+        if any(d.wg_public_key == eng.wg_public_key for d in eng.devices):
+            continue
+        peer = handshakes.get(eng.wg_public_key)
+        if peer and wireguard.handshake_is_online(peer.latest_handshake):
+            sessions.append(
+                LiveSession(
+                    actor_type="engineer",
+                    actor_id=eng.id,
+                    actor_name=eng.name,
+                    vpn_type="wireguard",
+                    endpoint=peer.endpoint,
+                    last_handshake=peer.latest_handshake,
+                    transfer_rx=peer.transfer_rx,
+                    transfer_tx=peer.transfer_tx,
+                )
+            )
+
+    for site in db.scalars(select(Site)).all():
+        if site.vpn_type == "wireguard":
+            peer = handshakes.get(site.wg_public_key or "")
+            if peer and wireguard.handshake_is_online(peer.latest_handshake):
+                sessions.append(
+                    LiveSession(
+                        actor_type="site",
+                        actor_id=site.id,
+                        actor_name=site.name,
+                        vpn_type="wireguard",
+                        endpoint=peer.endpoint,
+                        last_handshake=peer.latest_handshake,
+                        transfer_rx=peer.transfer_rx,
+                        transfer_tx=peer.transfer_tx,
+                        site_id=site.id,
+                        access_mode=getattr(site, "access_mode", "gateway") or "gateway",
+                    )
+                )
         elif site.vpn_type == "openvpn":
             connected = openvpn.connected_clients()
             if site.ovpn_common_name and site.ovpn_common_name in connected:
-                sessions.append(LiveSession(
-                    actor_type="site",
-                    actor_id=site.id,
-                    actor_name=site.name,
-                    vpn_type="openvpn",
-                    endpoint=None,
-                    last_handshake=connected[site.ovpn_common_name],
-                    site_id=site.id,
-                    access_mode=getattr(site, "access_mode", "gateway") or "gateway",
-                ))
+                sessions.append(
+                    LiveSession(
+                        actor_type="site",
+                        actor_id=site.id,
+                        actor_name=site.name,
+                        vpn_type="openvpn",
+                        endpoint=None,
+                        last_handshake=connected[site.ovpn_common_name],
+                        site_id=site.id,
+                        access_mode=getattr(site, "access_mode", "gateway") or "gateway",
+                    )
+                )
         elif site.vpn_type == "tailscale":
             if site.online:
-                sessions.append(LiveSession(
-                    actor_type="site",
-                    actor_id=site.id,
-                    actor_name=site.name,
-                    vpn_type="tailscale",
-                    endpoint=None,
-                    last_handshake=site.last_seen,
-                    site_id=site.id,
-                    access_mode=getattr(site, "access_mode", "gateway") or "gateway",
-                ))
+                sessions.append(
+                    LiveSession(
+                        actor_type="site",
+                        actor_id=site.id,
+                        actor_name=site.name,
+                        vpn_type="tailscale",
+                        endpoint=None,
+                        last_handshake=site.last_seen,
+                        site_id=site.id,
+                        access_mode=getattr(site, "access_mode", "gateway") or "gateway",
+                    )
+                )
 
     return sessions
 
 
 def poll_connection_transitions(db: Session) -> None:
-    """
-    Check for connection state transitions and log them.
-    Called from the background loop.
-    """
     from app.services.audit import (
         record_engineer_connect,
         record_engineer_disconnect,
@@ -120,21 +152,22 @@ def poll_connection_transitions(db: Session) -> None:
         record_site_disconnect,
     )
 
-    cfg = get_settings()
-
-    # Get current WireGuard handshakes
     handshakes = {p.public_key: p for p in wireguard.parse_handshakes()}
 
-    # Check engineer connections
-    engineers = db.scalars(select(Engineer).where(Engineer.enabled == True)).all()
-    for eng in engineers:
-        key = f"engineer:{eng.id}"
-        peer = handshakes.get(eng.wg_public_key)
+    devices = db.scalars(
+        select(EngineerDevice)
+        .options(selectinload(EngineerDevice.engineer))
+        .join(Engineer)
+        .where(Engineer.enabled == True, EngineerDevice.enabled == True)  # noqa: E712
+    ).all()
+
+    for device in devices:
+        key = f"engineer_device:{device.id}"
+        peer = handshakes.get(device.wg_public_key)
         is_online = peer is not None and wireguard.handshake_is_online(peer.latest_handshake)
         was_online = _last_online_state.get(key, False)
-
-        if is_online and not was_online:
-            # New connection
+        eng = device.engineer
+        if is_online and not was_online and eng:
             record_engineer_connect(
                 db,
                 engineer=eng,
@@ -142,49 +175,31 @@ def poll_connection_transitions(db: Session) -> None:
                 transfer_rx=peer.transfer_rx if peer else 0,
                 transfer_tx=peer.transfer_tx if peer else 0,
             )
-            logger.info("Engineer %s connected", eng.name)
-        elif was_online and not is_online:
-            # Disconnection
+            logger.info("Engineer device %s (%s) connected", eng.name, device.label)
+        elif was_online and not is_online and eng:
             record_engineer_disconnect(db, engineer=eng)
-            logger.info("Engineer %s disconnected", eng.name)
-
+            logger.info("Engineer device %s (%s) disconnected", eng.name, device.label)
         _last_online_state[key] = is_online
 
-    # Check site connections
-    sites = db.scalars(select(Site)).all()
-
-    # OpenVPN connected clients
     ovpn_connected = openvpn.connected_clients()
-
-    for site in sites:
+    for site in db.scalars(select(Site)).all():
         key = f"site:{site.id}"
-
         if site.vpn_type == "wireguard":
-            peer = handshakes.get(site.wg_public_key)
+            peer = handshakes.get(site.wg_public_key or "")
             is_online = peer is not None and wireguard.handshake_is_online(peer.latest_handshake)
             source_ip = peer.endpoint.split(":")[0] if peer and peer.endpoint else None
         elif site.vpn_type == "openvpn":
             is_online = site.ovpn_common_name in ovpn_connected if site.ovpn_common_name else False
             source_ip = None
-        elif site.vpn_type == "tailscale":
-            is_online = site.online
-            source_ip = None
         else:
-            is_online = False
+            is_online = bool(site.online)
             source_ip = None
 
         was_online = _last_online_state.get(key, False)
-
         if is_online and not was_online:
             record_site_connect(db, site=site, vpn_type=site.vpn_type, source_ip=source_ip)
             logger.info("Site %s (%s) connected", site.name, site.vpn_type)
         elif was_online and not is_online:
             record_site_disconnect(db, site=site, vpn_type=site.vpn_type)
             logger.info("Site %s (%s) disconnected", site.name, site.vpn_type)
-
         _last_online_state[key] = is_online
-
-
-def clear_state_cache() -> None:
-    """Clear the in-memory state cache. Useful for testing."""
-    _last_online_state.clear()

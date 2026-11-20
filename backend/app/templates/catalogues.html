@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Catalogues · ParkTech Relay{% endblock %}
+{% block page_title %}Catalogues{% endblock %}
+{% block page_subtitle %}Regions, tech device types, and site equipment types{% endblock %}
+{% block topbar_actions %}
+<a class="btn btn-outline-secondary btn-sm" href="/settings">Settings</a>
+{% endblock %}
+
+{% block body %}
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+{% if notice %}
+<div class="alert alert-success">{{ notice }}</div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Regions</div>
+      <div class="card-body">
+        <form method="post" action="/catalogues/regions" class="row g-2 mb-3">
+          <div class="col">
+            <input class="form-control" name="name" placeholder="New region" required>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-primary" type="submit">Add</button>
+          </div>
+        </form>
+        <ul class="list-group list-group-flush">
+          {% for r in regions %}
+          <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+            <span {% if not r.active %}class="text-secondary text-decoration-line-through"{% endif %}>{{ r.name }}</span>
+            <form method="post" action="/catalogues/regions/{{ r.id }}/toggle" class="m-0">
+              <button class="btn btn-sm btn-outline-secondary" type="submit">{% if r.active %}Disable{% else %}Enable{% endif %}</button>
+            </form>
+          </li>
+          {% else %}
+          <li class="list-group-item text-secondary px-0">No regions yet.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Tech device types</div>
+      <div class="card-body">
+        <p class="text-secondary small">Used when adding a phone/laptop/tablet for an engineer.</p>
+        <form method="post" action="/catalogues/tech-types" class="row g-2 mb-3">
+          <div class="col">
+            <input class="form-control" name="name" placeholder="New type" required>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-primary" type="submit">Add</button>
+          </div>
+        </form>
+        <ul class="list-group list-group-flush">
+          {% for t in tech_types %}
+          <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+            <span {% if not t.active %}class="text-secondary text-decoration-line-through"{% endif %}>{{ t.name }}</span>
+            <form method="post" action="/catalogues/tech-types/{{ t.id }}/toggle" class="m-0">
+              <button class="btn btn-sm btn-outline-secondary" type="submit">{% if t.active %}Disable{% else %}Enable{% endif %}</button>
+            </form>
+          </li>
+          {% else %}
+          <li class="list-group-item text-secondary px-0">No types yet.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Site equipment types</div>
+      <div class="card-body">
+        <p class="text-secondary small">Cheat-sheet presets on gateway sites.</p>
+        <form method="post" action="/catalogues/equipment-types" class="row g-2 mb-3">
+          <div class="col-12">
+            <input class="form-control" name="name" placeholder="New equipment type" required>
+          </div>
+          <div class="col">
+            <input class="form-control" name="default_admin_port" placeholder="Default port (optional)">
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-primary" type="submit">Add</button>
+          </div>
+        </form>
+        <ul class="list-group list-group-flush">
+          {% for t in equipment_types %}
+          <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+            <span {% if not t.active %}class="text-secondary text-decoration-line-through"{% endif %}>
+              {{ t.name }}
+              {% if t.default_admin_port %}<span class="text-secondary small mono">:{{ t.default_admin_port }}</span>{% endif %}
+            </span>
+            <form method="post" action="/catalogues/equipment-types/{{ t.id }}/toggle" class="m-0">
+              <button class="btn btn-sm btn-outline-secondary" type="submit">{% if t.active %}Disable{% else %}Enable{% endif %}</button>
+            </form>
+          </li>
+          {% else %}
+          <li class="list-group-item text-secondary px-0">No types yet.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

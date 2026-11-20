@@ -4,7 +4,7 @@
 {% block page_subtitle %}
   {% if engineer.enabled %}<span class="badge text-bg-success">Enabled</span>
   {% else %}<span class="badge text-bg-secondary">Disabled</span>{% endif %}
-  · <span class="mono">{{ engineer.assigned_ip }}</span>
+  · {{ engineer.devices|length }} device{{ 's' if engineer.devices|length != 1 else '' }}
 {% endblock %}
 {% block topbar_actions %}
 <a class="btn btn-outline-secondary btn-sm" href="/engineers">Engineers</a>
@@ -18,11 +18,10 @@
       <div class="card-body">
         <dl class="row mb-0">
           <dt class="col-4">Name</dt><dd class="col-8">{{ engineer.name }}</dd>
-          <dt class="col-4">IP</dt><dd class="col-8 mono">{{ engineer.assigned_ip }}</dd>
           <dt class="col-4">Created</dt><dd class="col-8">{{ engineer.created_at.strftime('%Y-%m-%d %H:%M') }}</dd>
           <dt class="col-4">Status</dt>
           <dd class="col-8">
-            {% if engineer.enabled %}Enabled — peer active on hub{% else %}Disabled — peer removed{% endif %}
+            {% if engineer.enabled %}Enabled — devices can connect{% else %}Disabled — all peers removed{% endif %}
           </dd>
         </dl>
       </div>
@@ -41,7 +40,7 @@
           <button class="btn btn-primary" type="submit">Enable access</button>
         </form>
         {% endif %}
-        <form method="post" action="/engineers/{{ engineer.id }}/delete" class="m-0" onsubmit="return confirm('Delete this engineer?')">
+        <form method="post" action="/engineers/{{ engineer.id }}/delete" class="m-0" onsubmit="return confirm('Delete this engineer and all devices?')">
           <button class="btn btn-outline-danger" type="submit">Delete</button>
         </form>
       </div>
@@ -50,61 +49,67 @@
 </div>
 
 <div class="card mb-3">
-  <div class="card-header fw-semibold">WireGuard configuration</div>
-  <div class="card-body">
-    <p class="text-secondary">Download and import into the WireGuard app, or scan the QR on mobile.</p>
-    <div class="d-flex flex-wrap gap-2 mb-3">
-      <a class="btn btn-primary" href="/engineers/{{ engineer.id }}/wireguard.conf">Download .conf</a>
-      <button type="button" class="btn btn-outline-secondary" onclick="copyEngineerConf()">Copy config</button>
+  <div class="card-header fw-semibold">Devices</div>
+  <div class="card-body p-0">
+    {% if not engineer.devices %}
+    <div class="text-center text-secondary py-4">No devices yet — add a phone or laptop below.</div>
+    {% else %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Label</th>
+            <th>Type</th>
+            <th>IP</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in engineer.devices %}
+          <tr>
+            <td class="fw-semibold">{{ d.label }}</td>
+            <td>{{ d.tech_device_type.name if d.tech_device_type else '—' }}</td>
+            <td class="mono">{{ d.assigned_ip }}</td>
+            <td>
+              {% if d.enabled and engineer.enabled %}
+              <span class="badge text-bg-success">Active</span>
+              {% else %}
+              <span class="badge text-bg-secondary">Disabled</span>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              <a class="btn btn-sm btn-outline-primary" href="/engineers/{{ engineer.id }}/devices/{{ d.id }}">Open</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-    <div class="row g-3">
-      <div class="col-lg-7">
-        <pre class="bg-light border rounded p-3 mono small mb-0" id="engineer-conf-preview">[Interface]
-PrivateKey = {{ engineer.wg_private_key[:20] }}...
-Address = {{ engineer.assigned_ip.split('/')[0] }}/32
-
-[Peer]
-PublicKey = (hub public key)
-Endpoint = {{ settings.wg_endpoint }}
-AllowedIPs = 10.101.0.0/16,10.100.0.0/22
-PersistentKeepalive = 25</pre>
-        <p class="text-secondary small mt-2 mb-0">On phone: WireGuard → Create from QR, or Create from file (import the downloaded <span class="mono">.conf</span>). Do not paste into a blank tunnel manually.</p>
-      </div>
-      <div class="col-lg-5">
-        <div class="qr-box" id="qr-output">
-          {% if qr_data_uri %}
-          <img src="{{ qr_data_uri }}" alt="WireGuard QR code" width="180" height="180">
-          {% else %}
-          <span class="text-secondary small">QR unavailable — use Download .conf</span>
-          {% endif %}
-        </div>
-      </div>
-    </div>
+    {% endif %}
   </div>
 </div>
 
 <div class="card">
-  <div class="card-header fw-semibold">Access scope</div>
+  <div class="card-header fw-semibold">Add device</div>
   <div class="card-body">
-    <ul class="mb-2">
-      <li><span class="mono">10.101.0.0/16</span> — all site virtual subnets</li>
-      <li><span class="mono">10.100.0.0/22</span> — hub transit networks</li>
-    </ul>
-    <p class="text-secondary small mb-0">Engineers always use virtual device IPs from the cheat sheet — not tunnel interface addresses.</p>
+    <form method="post" action="/engineers/{{ engineer.id }}/devices" class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label">Type</label>
+        <select class="form-select" name="tech_device_type_id" required>
+          {% for t in tech_types %}
+          <option value="{{ t.id }}">{{ t.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-5">
+        <label class="form-label">Label (optional)</label>
+        <input class="form-control" name="label" placeholder="Defaults to type name">
+      </div>
+      <div class="col-md-3 d-flex align-items-end">
+        <button class="btn btn-primary w-100" type="submit">Add device</button>
+      </div>
+    </form>
   </div>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-async function copyEngineerConf() {
-  try {
-    const response = await fetch('/engineers/{{ engineer.id }}/wireguard.conf');
-    const conf = await response.text();
-    await copyText(conf, 'WireGuard config');
-  } catch (e) {
-    showToast('Copy failed', false);
-  }
-}
-</script>
 {% endblock %}

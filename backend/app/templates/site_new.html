@@ -54,12 +54,12 @@
       </div>
       <div class="col-md-3">
         <label class="form-label">Region (optional)</label>
-        <input class="form-control" name="region" placeholder="London" list="region-suggestions">
-        <datalist id="region-suggestions">
+        <select class="form-select" name="region">
+          <option value="">—</option>
           {% for r in regions %}
-          <option value="{{ r }}"></option>
+          <option value="{{ r.name if r.name is defined else r }}">{{ r.name if r.name is defined else r }}</option>
           {% endfor %}
-        </datalist>
+        </select>
       </div>
       <div class="col-md-6" id="lan-fields">
         <label class="form-label">Local LAN subnet</label>

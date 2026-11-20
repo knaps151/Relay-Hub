@@ -19,6 +19,9 @@
     <a class="nav-link {% if request.url.path.startswith('/access-log') %}active{% endif %}" href="/access-log">
       <i class="bi bi-journal-text me-2"></i>Access log
     </a>
+    <a class="nav-link {% if request.url.path.startswith('/catalogues') %}active{% endif %}" href="/catalogues">
+      <i class="bi bi-card-list me-2"></i>Catalogues
+    </a>
     <a class="nav-link {% if request.url.path in ['/settings', '/setup'] %}active{% endif %}" href="/settings">
       <i class="bi bi-gear me-2"></i>Settings
     </a>

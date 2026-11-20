@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.config import get_settings
 from app.db import SessionLocal, get_db, init_db
 from app.device_presets import DEVICE_PRESETS
-from app.models import Engineer, Site, SiteDevice
+from app.models import Engineer, EngineerDevice, Site, SiteDevice
 from app.services import openvpn
 from app.services.headscale import HeadscaleClient
 from app.services.provision import (
@@ -154,9 +154,15 @@ def _headscale_ready() -> bool:
         return False
 
 
-def _all_regions(db: Session) -> list[str]:
-    rows = db.scalars(select(Site.region).where(Site.region != "").distinct()).all()
-    return sorted({(r or "").strip() for r in rows if (r or "").strip()})
+def _all_regions(db: Session) -> list:
+    """Active catalogue regions (objects); falls back to distinct site strings."""
+    from app.services.catalogues import list_regions
+
+    rows = list_regions(db, active_only=True)
+    if rows:
+        return rows
+    legacy = db.scalars(select(Site.region).where(Site.region != "").distinct()).all()
+    return sorted({(r or "").strip() for r in legacy if (r or "").strip()})
 
 
 def _filter_sites(
@@ -494,6 +500,17 @@ def site_detail(request: Request, site_id: int, db: Session = Depends(get_db)):
     # Get recent access events for this site
     from app.services.audit import get_site_recent_events
     recent_events = get_site_recent_events(db, site_id=site.id, limit=10)
+    from app.services.catalogues import list_equipment_types
+
+    equipment = list_equipment_types(db, active_only=True)
+    presets = [
+        {
+            "label": t.name,
+            "device_type": t.slug,
+            "admin_port": t.default_admin_port,
+        }
+        for t in equipment
+    ] or DEVICE_PRESETS
     return templates.TemplateResponse(
         request,
         "site_detail.html",
@@ -505,7 +522,7 @@ def site_detail(request: Request, site_id: int, db: Session = Depends(get_db)):
             "cfg": get_settings(),
             "security_warning": _security_warning(),
             "recent_events": recent_events,
-            "presets": DEVICE_PRESETS,
+            "presets": presets,
         },
     )
 
@@ -718,7 +735,9 @@ def engineers_list(request: Request, db: Session = Depends(get_db)):
     if not _authed(request):
         return RedirectResponse("/login", status_code=303)
     settings = get_or_create_settings(db)
-    engineers = db.scalars(select(Engineer).order_by(Engineer.created_at)).all()
+    engineers = db.scalars(
+        select(Engineer).options(selectinload(Engineer.devices)).order_by(Engineer.created_at)
+    ).all()
     return templates.TemplateResponse(
         request,
         "engineers.html",
@@ -770,27 +789,33 @@ def engineer_new(
 def engineer_detail(request: Request, engineer_id: int, db: Session = Depends(get_db)):
     if not _authed(request):
         return RedirectResponse("/login", status_code=303)
-    engineer = db.get(Engineer, engineer_id)
+    engineer = db.scalar(
+        select(Engineer)
+        .options(selectinload(Engineer.devices).selectinload(EngineerDevice.tech_device_type))
+        .where(Engineer.id == engineer_id)
+    )
     if not engineer:
         raise HTTPException(404, "Engineer not found")
     settings = get_or_create_settings(db)
-    qr_data_uri = None
-    try:
-        from app.services.engineers import render_engineer_conf
-        from app.services.qrcode_svg import svg_data_uri
+    from app.services.catalogues import list_tech_device_types
 
-        qr_data_uri = svg_data_uri(render_engineer_conf(db, engineer))
-    except Exception:
-        qr_data_uri = None
     return templates.TemplateResponse(
         request,
         "engineer_detail.html",
         {
             "settings": settings,
             "engineer": engineer,
-            "qr_data_uri": qr_data_uri,
+            "tech_types": list_tech_device_types(db, active_only=True),
             "security_warning": _security_warning(),
         },
+    )
+
+
+def _get_engineer_with_devices(db: Session, engineer_id: int) -> Engineer | None:
+    return db.scalar(
+        select(Engineer)
+        .options(selectinload(Engineer.devices).selectinload(EngineerDevice.tech_device_type))
+        .where(Engineer.id == engineer_id)
     )
 
 
@@ -798,7 +823,7 @@ def engineer_detail(request: Request, engineer_id: int, db: Session = Depends(ge
 def engineer_enable(request: Request, engineer_id: int, db: Session = Depends(get_db)):
     if not _authed(request):
         return RedirectResponse("/login", status_code=303)
-    engineer = db.get(Engineer, engineer_id)
+    engineer = _get_engineer_with_devices(db, engineer_id)
     if not engineer:
         raise HTTPException(404)
 
@@ -812,7 +837,7 @@ def engineer_enable(request: Request, engineer_id: int, db: Session = Depends(ge
 def engineer_disable(request: Request, engineer_id: int, db: Session = Depends(get_db)):
     if not _authed(request):
         return RedirectResponse("/login", status_code=303)
-    engineer = db.get(Engineer, engineer_id)
+    engineer = _get_engineer_with_devices(db, engineer_id)
     if not engineer:
         raise HTTPException(404)
 
@@ -826,7 +851,7 @@ def engineer_disable(request: Request, engineer_id: int, db: Session = Depends(g
 def engineer_delete(request: Request, engineer_id: int, db: Session = Depends(get_db)):
     if not _authed(request):
         return RedirectResponse("/login", status_code=303)
-    engineer = db.get(Engineer, engineer_id)
+    engineer = _get_engineer_with_devices(db, engineer_id)
     if not engineer:
         raise HTTPException(404)
 
@@ -836,22 +861,91 @@ def engineer_delete(request: Request, engineer_id: int, db: Session = Depends(ge
     return RedirectResponse("/engineers", status_code=303)
 
 
-@app.get("/engineers/{engineer_id}/wireguard.conf")
-def download_engineer_conf(request: Request, engineer_id: int, db: Session = Depends(get_db)):
+@app.post("/engineers/{engineer_id}/devices")
+def engineer_add_device(
+    request: Request,
+    engineer_id: int,
+    db: Session = Depends(get_db),
+    tech_device_type_id: int = Form(...),
+    label: str = Form(""),
+):
     if not _authed(request):
         return RedirectResponse("/login", status_code=303)
-    engineer = db.get(Engineer, engineer_id)
+    engineer = _get_engineer_with_devices(db, engineer_id)
     if not engineer:
         raise HTTPException(404)
 
-    from app.services.engineers import render_engineer_conf
+    from app.services.engineers import create_engineer_device
 
-    conf = render_engineer_conf(db, engineer)
-    # Record config download
+    device = create_engineer_device(
+        db,
+        engineer,
+        label=label,
+        tech_device_type_id=tech_device_type_id,
+    )
+    return RedirectResponse(f"/engineers/{engineer_id}/devices/{device.id}", status_code=303)
+
+
+@app.get("/engineers/{engineer_id}/devices/{device_id}", response_class=HTMLResponse)
+def engineer_device_detail(
+    request: Request,
+    engineer_id: int,
+    device_id: int,
+    db: Session = Depends(get_db),
+):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    engineer = _get_engineer_with_devices(db, engineer_id)
+    if not engineer:
+        raise HTTPException(404)
+    device = next((d for d in engineer.devices if d.id == device_id), None)
+    if not device:
+        raise HTTPException(404)
+    settings = get_or_create_settings(db)
+    qr_data_uri = None
+    try:
+        from app.services.engineers import render_engineer_device_conf
+        from app.services.qrcode_svg import svg_data_uri
+
+        qr_data_uri = svg_data_uri(render_engineer_device_conf(db, device))
+    except Exception:
+        qr_data_uri = None
+    return templates.TemplateResponse(
+        request,
+        "engineer_device_detail.html",
+        {
+            "settings": settings,
+            "engineer": engineer,
+            "device": device,
+            "qr_data_uri": qr_data_uri,
+            "security_warning": _security_warning(),
+        },
+    )
+
+
+@app.get("/engineers/{engineer_id}/devices/{device_id}/wireguard.conf")
+def download_engineer_device_conf(
+    request: Request,
+    engineer_id: int,
+    device_id: int,
+    db: Session = Depends(get_db),
+):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    engineer = _get_engineer_with_devices(db, engineer_id)
+    if not engineer:
+        raise HTTPException(404)
+    device = next((d for d in engineer.devices if d.id == device_id), None)
+    if not device:
+        raise HTTPException(404)
+
     from app.services.audit import record_engineer_config_download
+    from app.services.engineers import render_engineer_device_conf
+
+    conf = render_engineer_device_conf(db, device)
     source_ip = request.client.host if request.client else None
     record_engineer_config_download(db, engineer=engineer, source_ip=source_ip)
-    filename = engineer.name.lower().replace(" ", "-")[:20] or "engineer"
+    filename = f"{engineer.name}-{device.label}".lower().replace(" ", "-")[:40] or "engineer"
     return PlainTextResponse(
         conf,
         media_type="application/x-wireguard-profile",
@@ -860,6 +954,193 @@ def download_engineer_conf(request: Request, engineer_id: int, db: Session = Dep
             "Content-Type": "application/x-wireguard-profile; charset=utf-8",
         },
     )
+
+
+@app.post("/engineers/{engineer_id}/devices/{device_id}/enable")
+def engineer_device_enable(
+    request: Request, engineer_id: int, device_id: int, db: Session = Depends(get_db)
+):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    engineer = _get_engineer_with_devices(db, engineer_id)
+    device = next((d for d in (engineer.devices if engineer else []) if d.id == device_id), None)
+    if not engineer or not device:
+        raise HTTPException(404)
+    from app.services.engineers import enable_engineer_device
+
+    enable_engineer_device(db, device)
+    return RedirectResponse(f"/engineers/{engineer_id}/devices/{device_id}", status_code=303)
+
+
+@app.post("/engineers/{engineer_id}/devices/{device_id}/disable")
+def engineer_device_disable(
+    request: Request, engineer_id: int, device_id: int, db: Session = Depends(get_db)
+):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    engineer = _get_engineer_with_devices(db, engineer_id)
+    device = next((d for d in (engineer.devices if engineer else []) if d.id == device_id), None)
+    if not engineer or not device:
+        raise HTTPException(404)
+    from app.services.engineers import disable_engineer_device
+
+    disable_engineer_device(db, device)
+    return RedirectResponse(f"/engineers/{engineer_id}/devices/{device_id}", status_code=303)
+
+
+@app.post("/engineers/{engineer_id}/devices/{device_id}/delete")
+def engineer_device_delete(
+    request: Request, engineer_id: int, device_id: int, db: Session = Depends(get_db)
+):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    engineer = _get_engineer_with_devices(db, engineer_id)
+    device = next((d for d in (engineer.devices if engineer else []) if d.id == device_id), None)
+    if not engineer or not device:
+        raise HTTPException(404)
+    from app.services.engineers import delete_engineer_device
+
+    delete_engineer_device(db, device)
+    return RedirectResponse(f"/engineers/{engineer_id}", status_code=303)
+
+
+@app.get("/engineers/{engineer_id}/wireguard.conf")
+def download_engineer_conf(request: Request, engineer_id: int, db: Session = Depends(get_db)):
+    """Back-compat: first enabled device config."""
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    engineer = _get_engineer_with_devices(db, engineer_id)
+    if not engineer:
+        raise HTTPException(404)
+    if engineer.devices:
+        device = next((d for d in engineer.devices if d.enabled), engineer.devices[0])
+        return RedirectResponse(
+            f"/engineers/{engineer_id}/devices/{device.id}/wireguard.conf",
+            status_code=303,
+        )
+    raise HTTPException(400, "Engineer has no devices — add a phone/laptop first")
+
+
+# --- Catalogues (admin lists) ---
+
+@app.get("/catalogues", response_class=HTMLResponse)
+def catalogues_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    error: str = Query(""),
+    notice: str = Query(""),
+):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    settings = get_or_create_settings(db)
+    from app.services.catalogues import (
+        list_equipment_types,
+        list_regions,
+        list_tech_device_types,
+    )
+
+    return templates.TemplateResponse(
+        request,
+        "catalogues.html",
+        {
+            "settings": settings,
+            "regions": list_regions(db, active_only=False),
+            "tech_types": list_tech_device_types(db, active_only=False),
+            "equipment_types": list_equipment_types(db, active_only=False),
+            "error": error or None,
+            "notice": notice or None,
+            "security_warning": _security_warning(),
+        },
+    )
+
+
+@app.post("/catalogues/regions")
+def catalogues_add_region(request: Request, db: Session = Depends(get_db), name: str = Form(...)):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    from app.services.catalogues import add_region
+
+    try:
+        add_region(db, name=name)
+    except Exception as exc:
+        return RedirectResponse(f"/catalogues?error={quote(str(exc))}", status_code=303)
+    return RedirectResponse("/catalogues?notice=Region+added", status_code=303)
+
+
+@app.post("/catalogues/regions/{row_id}/toggle")
+def catalogues_toggle_region(request: Request, row_id: int, db: Session = Depends(get_db)):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    from app.models import CatalogueRegion
+    from app.services.catalogues import set_active
+
+    row = db.get(CatalogueRegion, row_id)
+    if row:
+        set_active(db, CatalogueRegion, row_id, not row.active)
+    return RedirectResponse("/catalogues", status_code=303)
+
+
+@app.post("/catalogues/tech-types")
+def catalogues_add_tech_type(request: Request, db: Session = Depends(get_db), name: str = Form(...)):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    from app.services.catalogues import add_tech_device_type
+
+    try:
+        add_tech_device_type(db, name=name)
+    except Exception as exc:
+        return RedirectResponse(f"/catalogues?error={quote(str(exc))}", status_code=303)
+    return RedirectResponse("/catalogues?notice=Tech+type+added", status_code=303)
+
+
+@app.post("/catalogues/tech-types/{row_id}/toggle")
+def catalogues_toggle_tech_type(request: Request, row_id: int, db: Session = Depends(get_db)):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    from app.models import CatalogueTechDeviceType
+    from app.services.catalogues import set_active
+
+    row = db.get(CatalogueTechDeviceType, row_id)
+    if row:
+        set_active(db, CatalogueTechDeviceType, row_id, not row.active)
+    return RedirectResponse("/catalogues", status_code=303)
+
+
+@app.post("/catalogues/equipment-types")
+def catalogues_add_equipment(
+    request: Request,
+    db: Session = Depends(get_db),
+    name: str = Form(...),
+    default_admin_port: str = Form(""),
+):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    from app.services.catalogues import add_equipment_type
+
+    port = None
+    if default_admin_port.strip():
+        try:
+            port = int(default_admin_port.strip())
+        except ValueError:
+            return RedirectResponse("/catalogues?error=Invalid+port", status_code=303)
+    try:
+        add_equipment_type(db, name=name, default_admin_port=port)
+    except Exception as exc:
+        return RedirectResponse(f"/catalogues?error={quote(str(exc))}", status_code=303)
+    return RedirectResponse("/catalogues?notice=Equipment+type+added", status_code=303)
+
+
+@app.post("/catalogues/equipment-types/{row_id}/toggle")
+def catalogues_toggle_equipment(request: Request, row_id: int, db: Session = Depends(get_db)):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    from app.models import CatalogueEquipmentType
+    from app.services.catalogues import set_active
+
+    row = db.get(CatalogueEquipmentType, row_id)
+    if row:
+        set_active(db, CatalogueEquipmentType, row_id, not row.active)
+    return RedirectResponse("/catalogues", status_code=303)
 
 
 # --- Connected / Access Log ---

@@ -15,6 +15,7 @@
         <thead class="table-light">
           <tr>
             <th>Name</th>
+            <th>Device</th>
             <th>VPN</th>
             <th>Endpoint</th>
             <th>Last handshake</th>
@@ -23,7 +24,18 @@
         <tbody>
           {% for s in tech_sessions %}
           <tr>
-            <td class="fw-semibold"><a href="/engineers/{{ s.actor_id }}">{{ s.actor_name }}</a></td>
+            <td class="fw-semibold">
+              {% if s.engineer_device_id %}
+              <a href="/engineers/{{ s.actor_id }}/devices/{{ s.engineer_device_id }}">{{ s.actor_name }}</a>
+              {% else %}
+              <a href="/engineers/{{ s.actor_id }}">{{ s.actor_name }}</a>
+              {% endif %}
+            </td>
+            <td>
+              {% if s.device_type_name %}<span class="badge text-bg-light border">{{ s.device_type_name }}</span>
+              {% elif s.device_label %}<span class="badge text-bg-light border">{{ s.device_label }}</span>
+              {% else %}—{% endif %}
+            </td>
             <td>{{ s.vpn_type }}</td>
             <td class="mono small">{{ s.endpoint or '—' }}</td>
             <td class="text-secondary small">{{ s.last_handshake|timeago if s.last_handshake else '—' }}</td>

@@ -92,3 +92,16 @@ def init_db() -> None:
 
     # Run any additional schema upgrades (column additions, etc.)
     run_schema_upgrades()
+
+    # Seed catalogues + migrate legacy engineer WG rows onto devices
+    db = SessionLocal()
+    try:
+        from app.services.catalogues import seed_catalogues
+        from app.services.engineers import migrate_legacy_engineer_devices
+
+        seed_catalogues(db)
+        migrate_legacy_engineer_devices(db)
+    except Exception:
+        logger.exception("catalogue/engineer migration failed")
+    finally:
+        db.close()

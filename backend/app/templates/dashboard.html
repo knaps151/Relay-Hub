@@ -72,7 +72,7 @@
         <select class="form-select" name="region">
           <option value="">All regions</option>
           {% for r in regions %}
-          <option value="{{ r }}" {% if region_filter == r %}selected{% endif %}>{{ r }}</option>
+          <option value="{{ r.name if r.name is defined else r }}" {% if region_filter == (r.name if r.name is defined else r) %}selected{% endif %}>{{ r.name if r.name is defined else r }}</option>
           {% endfor %}
         </select>
       </div>

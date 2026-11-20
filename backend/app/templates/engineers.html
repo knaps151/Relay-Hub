@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Engineers · ParkTech Relay{% endblock %}
 {% block page_title %}Engineers{% endblock %}
-{% block page_subtitle %}WireGuard access for field engineers · 10.100.2.0/24{% endblock %}
+{% block page_subtitle %}People with WireGuard devices · 10.100.2.0/24{% endblock %}
 {% block topbar_actions %}
 <a class="btn btn-primary btn-sm" href="/engineers/new"><i class="bi bi-plus-lg"></i> Add engineer</a>
 {% endblock %}
@@ -9,7 +9,7 @@
 {% block body %}
 <div class="card mb-3">
   <div class="card-body">
-    <p class="text-secondary mb-0">Engineers can reach all site virtual IPs over WireGuard. Each gets a unique IP and a downloadable <span class="mono">.conf</span>.</p>
+    <p class="text-secondary mb-0">Each engineer can have multiple devices (phone, laptop, tablet). Each device gets its own IP, config, and QR.</p>
   </div>
 </div>
 
@@ -27,7 +27,7 @@
         <thead class="table-light">
           <tr>
             <th>Name</th>
-            <th>Assigned IP</th>
+            <th>Devices</th>
             <th>Status</th>
             <th>Created</th>
             <th></th>
@@ -37,7 +37,7 @@
           {% for eng in engineers %}
           <tr>
             <td><a href="/engineers/{{ eng.id }}" class="fw-semibold">{{ eng.name }}</a></td>
-            <td class="mono">{{ eng.assigned_ip }}</td>
+            <td>{{ eng.devices|length }}</td>
             <td>
               {% if eng.enabled %}<span class="badge text-bg-success">Enabled</span>
               {% else %}<span class="badge text-bg-secondary">Disabled</span>{% endif %}

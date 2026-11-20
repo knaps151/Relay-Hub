@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}{{ device.label }} · {{ engineer.name }} · ParkTech Relay{% endblock %}
+{% block page_title %}{{ engineer.name }} · {{ device.label }}{% endblock %}
+{% block page_subtitle %}
+  {% if device.tech_device_type %}<span class="badge text-bg-light border">{{ device.tech_device_type.name }}</span>{% endif %}
+  · <span class="mono">{{ device.assigned_ip }}</span>
+  {% if device.enabled and engineer.enabled %}<span class="badge text-bg-success">Active</span>
+  {% else %}<span class="badge text-bg-secondary">Disabled</span>{% endif %}
+{% endblock %}
+{% block topbar_actions %}
+<a class="btn btn-outline-secondary btn-sm" href="/engineers/{{ engineer.id }}">Back</a>
+{% endblock %}
+
+{% block body %}
+<div class="card mb-3">
+  <div class="card-header fw-semibold">WireGuard configuration</div>
+  <div class="card-body">
+    <p class="text-secondary">Download and import into the WireGuard app, or scan the QR on mobile.</p>
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <a class="btn btn-primary" href="/engineers/{{ engineer.id }}/devices/{{ device.id }}/wireguard.conf">Download .conf</a>
+      <button type="button" class="btn btn-outline-secondary" onclick="copyDeviceConf()">Copy config</button>
+      {% if device.enabled %}
+      <form method="post" action="/engineers/{{ engineer.id }}/devices/{{ device.id }}/disable" class="m-0">
+        <button class="btn btn-outline-secondary" type="submit">Disable device</button>
+      </form>
+      {% else %}
+      <form method="post" action="/engineers/{{ engineer.id }}/devices/{{ device.id }}/enable" class="m-0">
+        <button class="btn btn-outline-primary" type="submit">Enable device</button>
+      </form>
+      {% endif %}
+      <form method="post" action="/engineers/{{ engineer.id }}/devices/{{ device.id }}/delete" class="m-0" onsubmit="return confirm('Delete this device?')">
+        <button class="btn btn-outline-danger" type="submit">Delete</button>
+      </form>
+    </div>
+    <div class="row g-3">
+      <div class="col-lg-7">
+        <pre class="bg-light border rounded p-3 mono small mb-0">[Interface]
+PrivateKey = {{ device.wg_private_key[:20] }}...
+Address = {{ device.assigned_ip.split('/')[0] }}/32
+
+[Peer]
+PublicKey = (hub public key)
+Endpoint = {{ settings.wg_endpoint }}
+AllowedIPs = 10.101.0.0/16,10.100.0.0/22
+PersistentKeepalive = 25</pre>
+        <p class="text-secondary small mt-2 mb-0">On phone: WireGuard → Create from QR, or Create from file.</p>
+      </div>
+      <div class="col-lg-5">
+        <div class="qr-box">
+          {% if qr_data_uri %}
+          <img src="{{ qr_data_uri }}" alt="WireGuard QR code" width="180" height="180">
+          {% else %}
+          <span class="text-secondary small">QR unavailable</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function copyDeviceConf() {
+  try {
+    const response = await fetch('/engineers/{{ engineer.id }}/devices/{{ device.id }}/wireguard.conf');
+    const conf = await response.text();
+    await copyText(conf, 'WireGuard config');
+  } catch (e) {
+    showToast('Copy failed', false);
+  }
+}
+</script>
+{% endblock %}

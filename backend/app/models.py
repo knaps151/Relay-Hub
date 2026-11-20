@@ -90,20 +90,90 @@ class HubState(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class CatalogueRegion(Base):
+    """Admin-managed region list for sites / filters."""
+
+    __tablename__ = "catalogue_regions"
+    __table_args__ = (UniqueConstraint("slug", name="uq_catalogue_region_slug"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(120))
+    slug: Mapped[str] = mapped_column(String(120))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class CatalogueTechDeviceType(Base):
+    """Admin-managed types for engineer endpoints (Phone, Laptop, Tablet)."""
+
+    __tablename__ = "catalogue_tech_device_types"
+    __table_args__ = (UniqueConstraint("slug", name="uq_catalogue_tech_type_slug"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(120))
+    slug: Mapped[str] = mapped_column(String(120))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class CatalogueEquipmentType(Base):
+    """Admin-managed site equipment types (router, ANPR, charger, …)."""
+
+    __tablename__ = "catalogue_equipment_types"
+    __table_args__ = (UniqueConstraint("slug", name="uq_catalogue_equipment_slug"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(120))
+    slug: Mapped[str] = mapped_column(String(120))
+    default_admin_port: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Engineer(Base):
     """
-    Field engineer with WireGuard access to all sites.
-    Engineers get IPs from 10.100.2.0/24 (starting at .10).
+    Field engineer (person). WireGuard identities live on EngineerDevice rows.
+    Legacy wg_* columns are kept nullable for migration of older DBs.
     """
     __tablename__ = "engineers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(200))
-    wg_private_key: Mapped[str] = mapped_column(Text)
-    wg_public_key: Mapped[str] = mapped_column(String(128))
-    assigned_ip: Mapped[str] = mapped_column(String(64))  # e.g., 10.100.2.10/32
+    wg_private_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    wg_public_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    assigned_ip: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    devices: Mapped[list["EngineerDevice"]] = relationship(
+        "EngineerDevice", back_populates="engineer", cascade="all, delete-orphan"
+    )
+
+
+class EngineerDevice(Base):
+    """A tech endpoint (phone/laptop/…) with its own WireGuard peer."""
+
+    __tablename__ = "engineer_devices"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    engineer_id: Mapped[int] = mapped_column(ForeignKey("engineers.id", ondelete="CASCADE"))
+    tech_device_type_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("catalogue_tech_device_types.id", ondelete="SET NULL"), nullable=True
+    )
+    label: Mapped[str] = mapped_column(String(200))
+    wg_private_key: Mapped[str] = mapped_column(Text)
+    wg_public_key: Mapped[str] = mapped_column(String(128))
+    assigned_ip: Mapped[str] = mapped_column(String(64))  # e.g. 10.100.2.10/32
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    engineer: Mapped[Engineer] = relationship("Engineer", back_populates="devices")
+    tech_device_type: Mapped[Optional[CatalogueTechDeviceType]] = relationship(
+        "CatalogueTechDeviceType"
+    )
 
 
 class AccessEvent(Base):
