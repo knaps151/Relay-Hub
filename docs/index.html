@@ -17,7 +17,7 @@
     <a class="brand" href="./">Relay Hub</a>
     <nav>
       <a href="#how">How it works</a>
-      <a href="#value">Make it good</a>
+      <a href="#roadmap">Roadmap</a>
       <a href="#start">Get started</a>
       <a class="btn btn-ghost" href="https://github.com/knaps151/Relay-Hub">GitHub</a>
     </nav>
@@ -67,50 +67,45 @@
       </ol>
     </section>
 
-    <section class="block two-col">
-      <div>
-        <h2>Built for fleets</h2>
-        <ul class="ticks">
-          <li>Fleet dashboard with Online / Offline / Disabled</li>
-          <li>Edit protocol, rotate credentials, disable without deleting</li>
-          <li>Catalogues for regions, equipment, and tech device types</li>
-          <li>Access log + config download audit trail</li>
-          <li>Compose stack: API, Headscale, OpenVPN, optional Caddy</li>
-        </ul>
-      </div>
-      <div class="panel">
-        <h3>What we learned in the POC</h3>
-        <p>Direct Linux / Pi WireGuard is the fastest path to a working demo. Consumer UniFi “VPN Client” is a poor gateway for inbound LAN access — prefer Teltonika or a small Linux edge with NETMAP.</p>
-      </div>
+    <section class="block">
+      <h2>Built for fleets</h2>
+      <p class="support">Everything an ops team needs to stand up remote access without a different process per car park.</p>
+      <ul class="ticks">
+        <li>Fleet dashboard with Online / Offline / Disabled</li>
+        <li>Edit protocol, rotate credentials, disable without deleting</li>
+        <li>Catalogues for regions, equipment, and tech device types</li>
+        <li>Access log + config download audit trail</li>
+        <li>Compose stack: API, Headscale, OpenVPN, optional Caddy</li>
+      </ul>
     </section>
 
-    <section id="value" class="block">
-      <h2>Making it good</h2>
-      <p class="support">The POC proves the model. These moves turn it into an operator product.</p>
+    <section id="roadmap" class="block">
+      <h2>Roadmap</h2>
+      <p class="support">Where Relay Hub is heading next.</p>
       <div class="cards">
         <article>
-          <h3>Trusted gateway path</h3>
-          <p>First-class Teltonika / Linux bring-up, health checks, and a clear “supported edge” list. Kill confusion around UniFi.</p>
+          <h3>Guided gateway setup</h3>
+          <p>First-class Teltonika and Linux edge bring-up, with health checks and a clear supported-hardware path.</p>
         </article>
         <article>
           <h3>Safer installs</h3>
-          <p>One-time temp links, shorter TTL options, scoped tokens for CI/cloud bootstrap, revoke-all on rotate.</p>
+          <p>One-time install links, scoped tokens for cloud bootstrap, and revoke-all when credentials rotate.</p>
         </article>
         <article>
           <h3>Smarter discovery</h3>
-          <p>Scheduled LAN scans, better type detection, optional mDNS/SNMP later — still additive, never destructive.</p>
+          <p>Scheduled LAN scans and richer device typing — still additive, never destructive.</p>
         </article>
         <article>
           <h3>Operator UX</h3>
-          <p>Handshake age, last reachability, per-device ping history, fleet filters, and “copy reach URL” everywhere.</p>
+          <p>Handshake age, last reachability, per-device history, fleet filters, and copy-ready reach URLs.</p>
         </article>
         <article>
           <h3>Hardening &amp; ops</h3>
-          <p>Forced strong admin password, backup/restore of SQLite + PKI, alert when a site goes dark.</p>
+          <p>Stronger defaults in production, backup/restore of data and PKI, alerts when a site goes dark.</p>
         </article>
         <article>
-          <h3>Pilot discipline</h3>
-          <p>1–2 real sites, named engineers on 4G, runbook for join/rotate/disable — then scale catalogues and regions.</p>
+          <h3>Fleet scale</h3>
+          <p>Regions, catalogues, and runbooks tuned for multi-site rollouts and day-two operations.</p>
         </article>
       </div>
     </section>
@@ -129,7 +124,7 @@ docker compose up -d --build
 
   <footer>
     <span>Relay Hub</span>
-    <span>POC · self-hosted · no cloud lock-in</span>
+    <span>Self-hosted · no cloud lock-in</span>
   </footer>
 </body>
 </html>
