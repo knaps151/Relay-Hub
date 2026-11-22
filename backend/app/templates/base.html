@@ -60,6 +60,12 @@
       const ok = xhr.getResponseHeader('X-Toast-Ok');
       if (msg) showToast(msg, ok !== '0');
     });
+
+    function confirmAction(form) {
+      const action = form.dataset.confirmAction || 'Proceed with';
+      const name = form.dataset.confirmName || 'this item';
+      return confirm(action + ' ' + name + '?');
+    }
   </script>
   {% block scripts %}{% endblock %}
 </body>

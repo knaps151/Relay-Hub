@@ -19,6 +19,7 @@ def mint_temp_download(
     *,
     kind: str,
     ttl_seconds: int = DEFAULT_TTL_SECONDS,
+    max_downloads: int = 1,  # Single-use by default
 ) -> TempDownloadToken:
     kind = kind.strip().lower()
     if kind not in {"wireguard", "openvpn", "teltonika"}:
@@ -38,6 +39,7 @@ def mint_temp_download(
         site_id=site.id,
         kind=kind,
         expires_at=datetime.utcnow() + timedelta(seconds=ttl_seconds),
+        max_downloads=max_downloads,
     )
     db.add(row)
     db.commit()
@@ -46,6 +48,7 @@ def mint_temp_download(
 
 
 def get_valid_token(db: Session, token: str) -> TempDownloadToken | None:
+    """Get token if valid (not expired, not exhausted)."""
     row = db.get(TempDownloadToken, token)
     if not row:
         return None
@@ -53,12 +56,30 @@ def get_valid_token(db: Session, token: str) -> TempDownloadToken | None:
         db.delete(row)
         db.commit()
         return None
+    # Check if max downloads reached
+    max_dl = row.max_downloads if row.max_downloads is not None else 1
+    if row.download_count >= max_dl:
+        return None
     return row
 
 
-def touch_download(db: Session, row: TempDownloadToken) -> None:
+def consume_token(db: Session, row: TempDownloadToken) -> bool:
+    """Consume a download from the token. Returns True if successful, False if exhausted."""
+    max_dl = row.max_downloads if row.max_downloads is not None else 1
+    if row.download_count >= max_dl:
+        return False
     row.download_count = int(row.download_count or 0) + 1
     db.commit()
+    # Delete token if exhausted
+    if row.download_count >= max_dl:
+        db.delete(row)
+        db.commit()
+    return True
+
+
+def touch_download(db: Session, row: TempDownloadToken) -> None:
+    """Legacy function - use consume_token instead."""
+    consume_token(db, row)
 
 
 def public_conf_url(public_base: str, token: str) -> str:

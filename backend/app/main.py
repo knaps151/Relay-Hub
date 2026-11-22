@@ -4,6 +4,8 @@ import asyncio
 import logging
 import secrets
 import subprocess
+import time
+from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -39,9 +41,43 @@ from app.services.provision import (
     wireguard_client_conf,
 )
 from app.services.subnets import virtual_ip_for_local
+from app.services.session_store import (
+    create_session,
+    delete_session,
+    get_session,
+    validate_csrf,
+    cleanup_expired,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("relay.hub")
+
+# Session cookie name
+SESSION_COOKIE = "relay_session"
+
+# Rate limiting for login: track failed attempts per IP
+_login_attempts: dict[str, list[float]] = defaultdict(list)
+LOGIN_RATE_LIMIT = 5  # Max attempts
+LOGIN_RATE_WINDOW = 300  # 5 minutes
+
+
+def _check_login_rate_limit(ip: str) -> bool:
+    """Check if IP is rate limited. Returns True if allowed, False if blocked."""
+    now = time.time()
+    cutoff = now - LOGIN_RATE_WINDOW
+    # Clean old attempts
+    _login_attempts[ip] = [t for t in _login_attempts[ip] if t > cutoff]
+    return len(_login_attempts[ip]) < LOGIN_RATE_LIMIT
+
+
+def _record_login_attempt(ip: str) -> None:
+    """Record a failed login attempt."""
+    _login_attempts[ip].append(time.time())
+
+
+def _clear_login_attempts(ip: str) -> None:
+    """Clear login attempts on successful login."""
+    _login_attempts.pop(ip, None)
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -120,6 +156,14 @@ async def _background_loops() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Security check: refuse to start with default password in production mode
+    cfg = get_settings()
+    if not cfg.http_only and cfg.admin_password == "relay":
+        raise RuntimeError(
+            "FATAL: Cannot start with default password 'relay' when HTTP_ONLY=0 (production mode). "
+            "Set ADMIN_PASSWORD in .env to a strong password."
+        )
+    
     init_db()
     try:
         from app.bootstrap_headscale import bootstrap_headscale
@@ -141,7 +185,13 @@ async def lifespan(app: FastAPI):
         pass
 
 
-app = FastAPI(title="Relay Hub", lifespan=lifespan)
+app = FastAPI(
+    title="Relay Hub",
+    lifespan=lifespan,
+    docs_url=None,  # Disable unauthenticated /docs
+    redoc_url=None,  # Disable unauthenticated /redoc
+    openapi_url=None,  # Disable unauthenticated /openapi.json
+)
 static_dir = BASE_DIR / "static"
 static_dir.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
@@ -218,19 +268,28 @@ def _toast(response: Response, message: str, ok: bool = True) -> Response:
 
 
 def _authed(request: Request) -> bool:
-    return request.cookies.get("relay_session") == "ok"
+    """Check if request has a valid session."""
+    session_id = request.cookies.get(SESSION_COOKIE)
+    if not session_id:
+        return False
+    return get_session(session_id) is not None
 
 
-def require_auth(request: Request) -> None:
-    cfg = get_settings()
-    # Allow health without auth; UI routes check cookie
-    if request.url.path in {"/healthz", "/login"}:
-        return
-    if request.method == "POST" and request.url.path == "/login":
-        return
-    if not _authed(request) and not request.url.path.startswith("/static"):
-        # API-ish downloads still need auth
-        pass
+def _get_csrf_token(request: Request) -> str | None:
+    """Get CSRF token for current session."""
+    session_id = request.cookies.get(SESSION_COOKIE)
+    if not session_id:
+        return None
+    data = get_session(session_id)
+    return data.csrf_token if data else None
+
+
+def _verify_csrf(request: Request, csrf_token: str | None) -> bool:
+    """Verify CSRF token for current session."""
+    session_id = request.cookies.get(SESSION_COOKIE)
+    if not session_id or not csrf_token:
+        return False
+    return validate_csrf(session_id, csrf_token)
 
 
 @app.get("/healthz")
@@ -245,26 +304,42 @@ def login_form(request: Request):
     return templates.TemplateResponse(
         request,
         "login.html",
-        {"error": None},
+        {"error": None, "rate_limited": False},
     )
 
 
 @app.post("/login")
 def login(request: Request, password: str = Form(...)):
     cfg = get_settings()
-    if not secrets.compare_digest(password, cfg.admin_password):
+    source_ip = request.client.host if request.client else "unknown"
+    
+    # Rate limiting check
+    if not _check_login_rate_limit(source_ip):
         return templates.TemplateResponse(
             request,
             "login.html",
-            {"error": "Invalid password"},
+            {"error": "Too many login attempts. Please wait 5 minutes.", "rate_limited": True},
+            status_code=429,
+        )
+    
+    if not secrets.compare_digest(password, cfg.admin_password):
+        _record_login_attempt(source_ip)
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {"error": "Invalid password", "rate_limited": False},
             status_code=401,
         )
+    
+    # Successful login - clear rate limit and create session
+    _clear_login_attempts(source_ip)
+    session_id, session_data = create_session(source_ip=source_ip)
+    
     # Record login event (best-effort, don't block login on audit failure)
     try:
         db = SessionLocal()
         try:
             from app.services.audit import record_login
-            source_ip = request.client.host if request.client else None
             record_login(db, source_ip=source_ip)
         finally:
             db.close()
@@ -272,14 +347,23 @@ def login(request: Request, password: str = Form(...)):
         pass  # Audit failure shouldn't block login
 
     redirect = RedirectResponse("/", status_code=303)
-    redirect.set_cookie("relay_session", "ok", httponly=True, samesite="lax")
+    redirect.set_cookie(
+        SESSION_COOKIE,
+        session_id,
+        httponly=True,
+        samesite="lax",
+        secure=not cfg.http_only,  # Secure when not in dev mode
+    )
     return redirect
 
 
 @app.post("/logout")
-def logout():
+def logout(request: Request):
+    session_id = request.cookies.get(SESSION_COOKIE)
+    if session_id:
+        delete_session(session_id)
     redirect = RedirectResponse("/login", status_code=303)
-    redirect.delete_cookie("relay_session")
+    redirect.delete_cookie(SESSION_COOKIE)
     return redirect
 
 
@@ -523,6 +607,21 @@ def site_detail(
         }
         for t in equipment
     ] or DEVICE_PRESETS
+    
+    # Validate temp_token and generate URLs server-side (prevent reflected XSS)
+    temp_install_cmd = None
+    temp_conf_url = None
+    temp_token = request.query_params.get("temp_token")
+    if temp_token:
+        from app.services.temp_download import get_valid_token, public_conf_url, linux_install_one_liner
+        token_row = get_valid_token(db, temp_token)
+        # Only show if token is valid AND belongs to this site
+        if token_row and token_row.site_id == site.id:
+            base = settings.public_ui_url
+            temp_conf_url = public_conf_url(base, temp_token)
+            if token_row.kind == "wireguard":
+                temp_install_cmd = linux_install_one_liner(base, temp_token)
+    
     return templates.TemplateResponse(
         request,
         "site_detail.html",
@@ -542,9 +641,10 @@ def site_detail(
             "regions": _all_regions(db),
             "edit_notice": request.query_params.get("notice") or None,
             "edit_error": request.query_params.get("error") or None,
-            "temp_install_cmd": request.query_params.get("temp_install") or None,
-            "temp_conf_url": request.query_params.get("temp_url") or None,
+            "temp_install_cmd": temp_install_cmd,
+            "temp_conf_url": temp_conf_url,
             "temp_ttl_minutes": 3,
+            "csrf_token": _get_csrf_token(request),
         },
     )
 
@@ -809,34 +909,28 @@ def site_temp_download(
             status_code=303,
         )
     base = get_or_create_settings(db).public_ui_url or get_settings().public_ui_url
-    conf_url = public_conf_url(base, row.token)
-    if kind == "wireguard":
-        install_cmd = linux_install_one_liner(base, row.token)
-        return RedirectResponse(
-            f"/sites/{site_id}?notice={quote('Link valid for 3 minutes')}"
-            f"&temp_url={quote(conf_url)}&temp_install={quote(install_cmd)}#credentials",
-            status_code=303,
-        )
+    # Pass token for server-side verification, not raw URLs
     return RedirectResponse(
-        f"/sites/{site_id}?notice={quote('Link valid for 3 minutes')}"
-        f"&temp_url={quote(conf_url)}#credentials",
+        f"/sites/{site_id}?notice={quote('Link valid for 3 minutes (single use)')}"
+        f"&temp_token={quote(row.token)}#credentials",
         status_code=303,
     )
 
 
 @app.get("/d/{token}")
 def temp_download_file(token: str, request: Request, db: Session = Depends(get_db)):
-    """Unauthenticated short-lived config download."""
+    """Unauthenticated short-lived single-use config download."""
     from app.services.audit import record_config_download
-    from app.services.temp_download import get_valid_token, touch_download
+    from app.services.temp_download import get_valid_token, consume_token
 
     row = get_valid_token(db, token)
     if not row:
-        raise HTTPException(410, "Link expired or invalid")
+        raise HTTPException(410, "Link expired, already used, or invalid")
     site = db.get(Site, row.site_id)
     if not site:
         raise HTTPException(404)
-    touch_download(db, row)
+    if not consume_token(db, row):
+        raise HTTPException(410, "Link already used")
     source_ip = request.client.host if request.client else None
     if row.kind == "wireguard":
         conf = wireguard_client_conf(db, site)
@@ -876,17 +970,18 @@ def temp_download_file(token: str, request: Request, db: Session = Depends(get_d
 
 @app.get("/d/{token}/install.sh")
 def temp_download_install_sh(token: str, request: Request, db: Session = Depends(get_db)):
-    """3-minute WireGuard install script for Linux (curl | sudo bash)."""
+    """3-minute single-use WireGuard install script for Linux (curl | sudo bash)."""
     from app.services.audit import record_config_download
-    from app.services.temp_download import get_valid_token, render_wireguard_install_script, touch_download
+    from app.services.temp_download import get_valid_token, render_wireguard_install_script, consume_token
 
     row = get_valid_token(db, token)
     if not row or row.kind != "wireguard":
-        raise HTTPException(410, "Link expired or invalid")
+        raise HTTPException(410, "Link expired, already used, or invalid")
     site = db.get(Site, row.site_id)
     if not site or site.vpn_type != "wireguard":
         raise HTTPException(404)
-    touch_download(db, row)
+    if not consume_token(db, row):
+        raise HTTPException(410, "Link already used")
     conf = wireguard_client_conf(db, site)
     source_ip = request.client.host if request.client else None
     record_config_download(db, site=site, config_type="wireguard-install.sh", source_ip=source_ip)
@@ -1495,19 +1590,28 @@ def access_log_export(
         limit=10000,
     )
 
+    def sanitize_csv_cell(value: str) -> str:
+        """Prevent CSV formula injection by prefixing dangerous characters."""
+        if not value:
+            return value
+        # Characters that can trigger formula execution in spreadsheets
+        if value[0] in ('=', '+', '-', '@', '\t', '\r', '\n'):
+            return "'" + value
+        return value
+
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["Timestamp", "Kind", "Actor Type", "Actor Name", "Site ID", "Device ID", "Source IP", "Detail"])
     for e in events:
         writer.writerow([
             e.timestamp.isoformat() if e.timestamp else "",
-            e.kind,
-            e.actor_type,
-            e.actor_name,
+            sanitize_csv_cell(e.kind or ""),
+            sanitize_csv_cell(e.actor_type or ""),
+            sanitize_csv_cell(e.actor_name or ""),
             e.site_id or "",
             e.device_id or "",
-            e.source_ip or "",
-            e.detail or "",
+            sanitize_csv_cell(e.source_ip or ""),
+            sanitize_csv_cell(e.detail or ""),
         ])
 
     csv_content = output.getvalue()

@@ -25,10 +25,16 @@ from app.services.subnets import virtual_ip_for_local
 
 router = APIRouter(prefix="/api", tags=["api"])
 
+SESSION_COOKIE = "relay_session"
+
 
 def _authed_session(request: Request) -> bool:
     """Check if request has valid admin session cookie."""
-    return request.cookies.get("relay_session") == "ok"
+    from app.services.session_store import get_session
+    session_id = request.cookies.get(SESSION_COOKIE)
+    if not session_id:
+        return False
+    return get_session(session_id) is not None
 
 
 def _authed_token(authorization: str | None) -> bool:

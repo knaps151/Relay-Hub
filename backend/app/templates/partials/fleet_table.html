@@ -59,7 +59,8 @@
               <a class="btn btn-sm btn-outline-primary" href="/sites/{{ site.id }}">Open</a>
               {% if site.enabled %}
               <form method="post" action="/sites/{{ site.id }}/disable" class="m-0"
-                    onsubmit="return confirm('Disable {{ site.name }}?')">
+                    data-confirm-action="Disable" data-confirm-name="{{ site.name|e }}"
+                    onsubmit="return confirmAction(this)">
                 <button class="btn btn-sm btn-outline-warning" type="submit">Disable</button>
               </form>
               {% else %}
@@ -68,7 +69,8 @@
               </form>
               {% endif %}
               <form method="post" action="/sites/{{ site.id }}/delete" class="m-0"
-                    onsubmit="return confirm('Permanently delete {{ site.name }}?')">
+                    data-confirm-action="Permanently delete" data-confirm-name="{{ site.name|e }}"
+                    onsubmit="return confirmAction(this)">
                 <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
               </form>
             </div>
