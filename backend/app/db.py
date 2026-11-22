@@ -75,6 +75,7 @@ def run_schema_upgrades() -> None:
         ("sites", "region", "region VARCHAR(120) DEFAULT ''"),
         ("sites", "access_mode", "access_mode VARCHAR(32) DEFAULT 'gateway'"),
         ("sites", "enabled", "enabled BOOLEAN DEFAULT 1"),
+        ("temp_download_tokens", "max_downloads", "max_downloads INTEGER DEFAULT 1"),
     ]
 
     for table_name, column_name, column_def in column_migrations:

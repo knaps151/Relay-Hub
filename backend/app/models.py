@@ -102,6 +102,7 @@ class TempDownloadToken(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     download_count: Mapped[int] = mapped_column(Integer, default=0)
+    max_downloads: Mapped[int] = mapped_column(Integer, default=1)  # Single-use by default
 
 
 class CatalogueRegion(Base):
